@@ -69,7 +69,7 @@ export class Room {
 
   async createWebRtcTransport(peer: Peer): Promise<mediasoup.types.WebRtcTransport> {
     const transport = await this.router.createWebRtcTransport({
-      listenIps: [{ ip: '0.0.0.0', announcedIp: config.announcedIp }],
+      listenIps: config.announcedIps.map((announcedIp) => ({ ip: '0.0.0.0' as const, announcedIp })),
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,

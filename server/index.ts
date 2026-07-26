@@ -277,5 +277,5 @@ await roomManager.init();
 server.listen(config.httpPort, () => {
   const proto = server instanceof https.Server ? 'https' : 'http';
   console.log(`overheard listening on ${proto}://localhost:${config.httpPort}`);
-  console.log(`announced IP for WebRTC: ${config.announcedIp}`);
+  console.log(`announced IPs for WebRTC: ${config.announcedIps.join(', ')}`);
 });
