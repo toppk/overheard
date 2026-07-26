@@ -1,0 +1,12 @@
+node_modules
+web/dist
+web/node_modules
+web/.astro
+recordings
+certs
+.venv
+.git
+.github
+*.log
+*.pem
+TODO.md

@@ -54,20 +54,58 @@ tool:
   and the per-speaker audio. Constructs taped before auto-transcription
   existed (or after a failure) offer a "wake wintermute" button.
 
-### Calling from other devices (e.g. iPad Safari)
+### Calling from other devices
 
-Browsers require HTTPS for microphone access on non-localhost origins:
+Browsers require HTTPS for microphone access on non-localhost origins.
+Drop real certificates into `certs/cert.pem` (full chain) and
+`certs/key.pem`, or generate self-signed ones for LAN testing:
 
 ```sh
 ./scripts/gen-certs.sh                  # writes certs/{cert,key}.pem
-MEDIASOUP_ANNOUNCED_IP=<your-lan-ip> npm run dev
 ```
 
-Then open `https://<your-lan-ip>:3000` on the device and accept the
-self-signed certificate. `MEDIASOUP_ANNOUNCED_IP` defaults to the first
-non-internal IPv4 address, so setting it is only needed when that guess is
-wrong. No TURN server yet — clients must be able to reach the announced IP
-directly (same LAN is fine).
+The server switches to HTTPS automatically when `certs/` exists.
+
+### Deploying on the internet
+
+**Read [SECURITY.md](SECURITY.md) first** — there is no authentication;
+anyone who reaches the instance can hear everything.
+
+Open exactly these ports:
+
+- `3000/tcp` — HTTPS + WSS signaling
+- `40000-40100/udp` — WebRTC media
+- `40000-40100/tcp` — ICE-TCP fallback (optional but recommended)
+
+Environment variables:
+
+| var | default | purpose |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP(S) listen port |
+| `MEDIASOUP_ANNOUNCED_IPS` | all non-internal IPv4s | comma-separated ICE candidate IPs (set to `public,lan` explicitly on multi-homed hosts) |
+| `RTC_MIN_PORT` / `RTC_MAX_PORT` | `40000` / `40100` | WebRTC media port range |
+| `RECORDINGS_DIR` | `recordings` | where audio/transcripts land |
+| `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
+| `TRANSCRIBE_DISABLED` | unset | set to disable auto-transcription |
+
+No TURN server yet — clients must be able to reach an announced IP
+directly, which works for the common client-behind-NAT case since the
+server is the media endpoint.
+
+### Docker
+
+```sh
+docker build -t overheard .
+docker run --network host \
+  -v $PWD/recordings:/app/recordings \
+  -v $PWD/certs:/app/certs \
+  overheard
+```
+
+Host networking is the pragmatic choice for WebRTC's port range; with
+bridged networking you must publish `3000/tcp` and the full RTC range and
+keep `MEDIASOUP_ANNOUNCED_IPS` pointing at the host. Tagged releases
+(`v*`) build and push `ghcr.io/<owner>/overheard` via GitHub Actions.
 
 ## Transcription
 
@@ -94,11 +132,20 @@ Outputs in `recordings/<room-id>/transcripts/`:
 - `conversation.md` — readable transcript; simultaneous speech is marked
   `[overlapping]` rather than flattened into a false sequence
 
-## Testing without a second person
+## Development
 
-`npx tsx scripts/loopback-test.ts` injects a sine tone as a fake participant
-through the full mediasoup → ffmpeg recording pipeline and verifies a playable
-Ogg/Opus file is produced.
+```sh
+npm run check           # typecheck the server
+npm run build:web       # build the frontend
+npm run test:loopback   # end-to-end recording pipeline test (needs ffmpeg)
+```
+
+`test:loopback` injects a sine tone as a fake participant through the full
+mediasoup → ffmpeg recording pipeline and fails unless a playable Ogg/Opus
+file comes out. CI (`.github/workflows/ci.yml`) runs typecheck, frontend
+build, a python syntax check, the loopback test, and a Docker build on
+every push; tagging `v*` triggers the release workflow (GHCR image +
+GitHub release).
 
 ## Layout
 

@@ -64,11 +64,16 @@ console.log(`stop() finalized the track in ${Date.now() - stopStart}ms`);
 producer.close();
 worker.close();
 
-// Verify the recorded file.
+// Verify the recorded file; the probe result is the test result (CI runs this).
 const probe = spawn('ffprobe', [
   '-v', 'error', '-show_entries', 'format=duration,format_name',
   '-of', 'default=noprint_wrappers=1',
   `recordings/loopback-test/${rec.file}`,
 ], { stdio: ['ignore', 'inherit', 'inherit'] });
-await new Promise((r) => probe.once('exit', r));
+const probeCode: number = await new Promise((r) => probe.once('exit', r));
+if (probeCode !== 0) {
+  console.error('FAIL: recorded file is not a valid audio file');
+  process.exit(1);
+}
+console.log('PASS: recording pipeline produced a valid file');
 process.exit(0);

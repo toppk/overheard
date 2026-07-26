@@ -108,6 +108,16 @@ li::before { content: '▸ '; color: var(--dim); }
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
+}
+/* Tight screens: the toggle drops to its own line, tucked under the meter. */
+@media (max-width: 520px) {
+  .flow-toggle {
+    flex-basis: 100%;
+    margin-left: 2em;
+    text-align: left;
+  }
+  .flow-row + .flow-row { margin-top: 0.4rem; }
 }
 .flow-arrow {
   color: var(--cyan);
