@@ -37,8 +37,9 @@ import HelpDeck from '../components/HelpDeck.astro';
       <h2>hot constructs</h2>
       <ul id="rooms"><li class="narrative">…</li></ul>
 
-      <h2>cold storage</h2>
-      <ul id="archives"><li class="narrative">…</li></ul>
+      <h2>cold storage — last 24h</h2>
+      <ul id="archives" class="scrollpane"><li class="narrative">…</li></ul>
+      <p class="narrative" id="storage-link" style="margin-top:0.3rem;"></p>
 
       <h2>grid traffic</h2>
       <div class="log panel" id="events"></div>
@@ -112,8 +113,10 @@ import HelpDeck from '../components/HelpDeck.astro';
         const archives = document.getElementById('archives')!;
         archives.innerHTML = '';
         if (!state.archives.length) {
-          archives.innerHTML = '<li class="narrative">cold storage sits empty. nothing has flatlined yet.</li>';
+          archives.innerHTML = '<li class="narrative">nothing has flatlined in the last day.</li>';
         }
+        const link = document.getElementById('storage-link')!;
+        link.innerHTML = `${state.archiveTotal ?? state.archives.length} construct(s) in cold storage · <a href="/storage">browse the stacks</a>`;
         for (const ar of state.archives) {
           const li = document.createElement('li');
           const who = ar.participants.length ? ar.participants.join(', ') : 'no one spoke';

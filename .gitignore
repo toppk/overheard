@@ -9,3 +9,4 @@ __pycache__/
 nohup.out
 TODO.md
 *.pem
+data/

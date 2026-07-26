@@ -92,6 +92,32 @@ li::before { content: '▸ '; color: var(--dim); }
   max-height: 14rem;
   overflow-y: auto;
 }
+.scrollpane { max-height: 14rem; overflow-y: auto; }
+
+/* Filter toggles on the storage page. */
+.toggles { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
+.toggles .label { color: var(--dim); font-size: 0.85rem; min-width: 5.5rem; }
+.toggle {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
+}
+.toggle:hover { border-color: var(--cyan); color: var(--text); }
+.toggle.on {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(75, 228, 228, 0.25);
+}
+mark {
+  background: none;
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(224, 175, 104, 0.5);
+}
 .log div::before { content: '>> '; }
 
 .meter { color: var(--cyan); white-space: pre; letter-spacing: 0.05em; }

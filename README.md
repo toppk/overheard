@@ -53,6 +53,10 @@ tool:
   `/archive/{room-id}`: the conversation transcript, the structured JSON,
   and the per-speaker audio. Constructs taped before auto-transcription
   existed (or after a failure) offer a "wake wintermute" button.
+- **The stacks** (`/storage`) — search and filter all of cold storage:
+  full-text search over every transcript (Turso native FTS, BM25-ranked
+  with highlighted snippets), plus toggle filters for date, duration, and
+  which voices were in the room. The grid lobby shows only the last 24h.
 
 ### Calling from other devices
 
@@ -85,6 +89,7 @@ Environment variables:
 | `MEDIASOUP_ANNOUNCED_IPS` | all non-internal IPv4s | comma-separated ICE candidate IPs (set to `public,lan` explicitly on multi-homed hosts) |
 | `RTC_MIN_PORT` / `RTC_MAX_PORT` | `40000` / `40100` | WebRTC media port range |
 | `RECORDINGS_DIR` | `recordings` | where audio/transcripts land |
+| `DB_PATH` | `data/overheard.db` | cold-storage index (Turso embedded, FTS over transcripts; rebuildable from `RECORDINGS_DIR`) |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
 | `TRANSCRIBE_DISABLED` | unset | set to disable auto-transcription |
 

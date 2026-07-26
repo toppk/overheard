@@ -9,14 +9,25 @@ import { config } from './config.js';
 import { RoomManager, type Peer, type Room } from './room.js';
 import { Lobby } from './lobby.js';
 import { generateRoomName } from './roomNames.js';
-import { isSealed, listArchives, readMetadata } from './archives.js';
+import { isSealed, readMetadata } from './archives.js';
 import { transcribeRoom, transcriptionStatus } from './transcriber.js';
+import {
+  initDb,
+  upsertArchive,
+  getRecentCached,
+  queryArchives,
+  participantFacets,
+} from './db.js';
 
 const roomManager = new RoomManager();
-const lobby = new Lobby(() => ({
-  rooms: roomManager.listLive(),
-  archives: listArchives(),
-}));
+const lobby = new Lobby(() => {
+  const recent = getRecentCached();
+  return {
+    rooms: roomManager.listLive(),
+    archives: recent.archives,
+    archiveTotal: recent.total,
+  };
+});
 
 const app = express();
 const webDist = path.resolve('web/dist');
@@ -34,6 +45,35 @@ app.use('/recordings', express.static(path.resolve(config.recordingsDir)));
 // Astro builds /chat and /archive as static pages; ids live in the URL path.
 app.get('/chat/:room', (_req, res) => res.sendFile(path.join(webDist, 'chat/index.html')));
 app.get('/archive/:room', (_req, res) => res.sendFile(path.join(webDist, 'archive/index.html')));
+app.get('/storage', (_req, res) => res.sendFile(path.join(webDist, 'storage/index.html')));
+
+// Cold-storage browser: filters + FTS over transcripts.
+app.get('/api/storage', async (req, res) => {
+  const q = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined;
+  const handles = typeof req.query.handles === 'string' && req.query.handles
+    ? req.query.handles.split(',').filter(Boolean)
+    : undefined;
+  const num = (v: unknown) => (typeof v === 'string' && v !== '' ? Number(v) : undefined);
+  try {
+    const result = await queryArchives({
+      q,
+      handles,
+      sinceMs: num(req.query.sinceMs),
+      minDurMs: num(req.query.minDurMs),
+      maxDurMs: num(req.query.maxDurMs),
+      offset: num(req.query.offset),
+      limit: num(req.query.limit),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[api/storage] query failed:', err);
+    res.status(500).json({ error: 'query failed' });
+  }
+});
+
+app.get('/api/storage/facets', async (_req, res) => {
+  res.json({ handles: await participantFacets() });
+});
 
 app.get('/api/dig', (_req, res) => {
   const roomId = generateRoomName((name) => roomManager.isActive(name) || isSealed(name));
@@ -63,6 +103,7 @@ app.post('/api/archives/:room/transcribe', (req, res) => {
 
 function startScribe(roomId: string): boolean {
   const started = transcribeRoom(roomId, (status) => {
+    void upsertArchive(roomId).then(() => lobby.broadcastState());
     lobby.announce(
       status === 'done'
         ? `wintermute commits the transcript of ${roomId} to cold storage.`
@@ -133,6 +174,7 @@ async function leaveRoom(state: SessionState): Promise<void> {
   console.log(`[room ${room.id}] ${peer.name} left (${room.peers.size} remaining)`);
   const sealed = await roomManager.closeRoomIfEmpty(room);
   if (sealed) {
+    await upsertArchive(room.id);
     lobby.announce(`The last channel closes; construct ${room.id} flatlines into cold storage.`);
     if (room.finishedRecordings.length > 0) startScribe(room.id);
   } else {
@@ -288,6 +330,7 @@ function requireJoined(state: SessionState): { room: Room; peer: Peer } {
 }
 
 await roomManager.init();
+await initDb();
 server.listen(config.httpPort, () => {
   const proto = server instanceof https.Server ? 'https' : 'http';
   console.log(`overheard listening on ${proto}://localhost:${config.httpPort}`);

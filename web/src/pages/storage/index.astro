@@ -1,0 +1,183 @@
+---
+import '../../styles/neon.css';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>overheard // the stacks</title>
+  </head>
+  <body>
+    <h1>cold storage // the stacks</h1>
+    <p class="narrative">
+      Every flatlined construct, kept exactly as it went to tape. Query the
+      stacks; the daemon indexed every word.
+    </p>
+
+    <div class="panel">
+      <input id="q" placeholder="query the stacks… (full-text over every transcript)" style="width:100%;" />
+      <div class="toggles" id="date-toggles">
+        <span class="label">sealed</span>
+        <button class="toggle on" data-since="">all time</button>
+        <button class="toggle" data-since="86400000">24h</button>
+        <button class="toggle" data-since="604800000">7d</button>
+        <button class="toggle" data-since="2592000000">30d</button>
+      </div>
+      <div class="toggles" id="dur-toggles">
+        <span class="label">ran for</span>
+        <button class="toggle on" data-min="" data-max="">any</button>
+        <button class="toggle" data-min="" data-max="300000">&lt;5m</button>
+        <button class="toggle" data-min="300000" data-max="1800000">5–30m</button>
+        <button class="toggle" data-min="1800000" data-max="">&gt;30m</button>
+      </div>
+      <div class="toggles" id="handle-toggles">
+        <span class="label">voices</span>
+        <span class="narrative">…</span>
+      </div>
+    </div>
+
+    <p class="narrative" id="summary">reading the stacks…</p>
+    <ul id="results"></ul>
+    <p><button class="cmd" id="more-btn" style="display:none;">pull more from the stacks</button></p>
+
+    <p><a href="/">back to the grid</a></p>
+
+    <script>
+      import { diag } from '../../lib/diag';
+
+      diag('page load: /storage (the stacks)');
+      const qInput = document.getElementById('q') as HTMLInputElement;
+      const results = document.getElementById('results')!;
+      const summary = document.getElementById('summary')!;
+      const moreBtn = document.getElementById('more-btn') as HTMLButtonElement;
+
+      const state = {
+        q: '',
+        sinceMs: '',
+        minDurMs: '',
+        maxDurMs: '',
+        handles: new Set<string>(),
+        offset: 0,
+        total: 0,
+      };
+
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const fmtAgo = (iso: string) => {
+        const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins}m ago`;
+        if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+        return `${Math.round(mins / 1440)}d ago`;
+      };
+      const fmtDur = (ms: number) => {
+        const m = Math.round(ms / 60000);
+        return m < 1 ? '<1 min' : `${m} min`;
+      };
+
+      function renderRow(ar: any): HTMLLIElement {
+        const li = document.createElement('li');
+        const who = ar.participants.length ? ar.participants.map(esc).join(', ') : 'no one spoke';
+        const status =
+          ar.transcript === 'done' ? 'parsed'
+          : ar.transcript === 'running' ? '<span class="status-running">parsing…</span>'
+          : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
+          : 'unparsed';
+        let html = `<span class="status-sealed">${esc(ar.roomId)}</span> — ${who} · sealed ${fmtAgo(ar.endedAt)} · ${fmtDur(ar.durationMs)} · ${status} `;
+        li.innerHTML = html;
+        const a = document.createElement('a');
+        a.href = `/archive/${ar.roomId}`;
+        a.textContent = 'access';
+        li.appendChild(a);
+        if (ar.snippet) {
+          const div = document.createElement('div');
+          div.className = 'narrative';
+          div.style.marginLeft = '1rem';
+          div.innerHTML = esc(ar.snippet)
+            .replaceAll('\u0001', '<mark>')
+            .replaceAll('\u0002', '</mark>');
+          li.appendChild(div);
+        }
+        return li;
+      }
+
+      async function search(append = false) {
+        if (!append) state.offset = 0;
+        const params = new URLSearchParams();
+        if (state.q) params.set('q', state.q);
+        if (state.sinceMs) params.set('sinceMs', state.sinceMs);
+        if (state.minDurMs) params.set('minDurMs', state.minDurMs);
+        if (state.maxDurMs) params.set('maxDurMs', state.maxDurMs);
+        if (state.handles.size) params.set('handles', [...state.handles].join(','));
+        params.set('offset', String(state.offset));
+        params.set('limit', '20');
+        diag(`stacks query: ${params.toString()}`);
+        const res = await fetch(`/api/storage?${params}`);
+        if (!res.ok) {
+          summary.textContent = 'the stacks did not answer. (query failed)';
+          return;
+        }
+        const data = await res.json();
+        state.total = data.total;
+        if (!append) results.innerHTML = '';
+        for (const ar of data.rows) results.appendChild(renderRow(ar));
+        state.offset += data.rows.length;
+        summary.textContent = `${data.total} construct(s) match${state.q ? ` "${state.q}"` : ''}.`;
+        moreBtn.style.display = state.offset < state.total ? 'inline' : 'none';
+      }
+
+      function wireSingleSelect(containerId: string, apply: (btn: HTMLElement) => void) {
+        const container = document.getElementById(containerId)!;
+        container.addEventListener('click', (e) => {
+          const btn = (e.target as HTMLElement).closest('.toggle') as HTMLElement | null;
+          if (!btn) return;
+          container.querySelectorAll('.toggle').forEach((b) => b.classList.remove('on'));
+          btn.classList.add('on');
+          apply(btn);
+          search();
+        });
+      }
+      wireSingleSelect('date-toggles', (btn) => (state.sinceMs = btn.dataset.since ?? ''));
+      wireSingleSelect('dur-toggles', (btn) => {
+        state.minDurMs = btn.dataset.min ?? '';
+        state.maxDurMs = btn.dataset.max ?? '';
+      });
+
+      async function loadFacets() {
+        const res = await fetch('/api/storage/facets');
+        const { handles } = await res.json();
+        const container = document.getElementById('handle-toggles')!;
+        container.innerHTML = '<span class="label">voices</span>';
+        if (!handles.length) {
+          container.insertAdjacentHTML('beforeend', '<span class="narrative">no voices on record.</span>');
+          return;
+        }
+        for (const h of handles) {
+          const btn = document.createElement('button');
+          btn.className = 'toggle';
+          btn.textContent = `${h.handle} (${h.rooms})`;
+          btn.addEventListener('click', () => {
+            const on = btn.classList.toggle('on');
+            if (on) state.handles.add(h.handle);
+            else state.handles.delete(h.handle);
+            search();
+          });
+          container.appendChild(btn);
+        }
+      }
+
+      let debounce = 0;
+      qInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        debounce = window.setTimeout(() => {
+          state.q = qInput.value.trim();
+          search();
+        }, 250);
+      });
+
+      moreBtn.addEventListener('click', () => search(true));
+
+      loadFacets();
+      search();
+    </script>
+  </body>
+</html>
