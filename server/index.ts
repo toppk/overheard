@@ -131,8 +131,8 @@ async function leaveRoom(state: SessionState): Promise<void> {
   await room.removePeer(peer.id);
   room.broadcast(null, { type: 'peerLeft', peerId: peer.id, name: peer.name });
   console.log(`[room ${room.id}] ${peer.name} left (${room.peers.size} remaining)`);
-  if (room.isEmpty) {
-    await roomManager.closeRoomIfEmpty(room);
+  const sealed = await roomManager.closeRoomIfEmpty(room);
+  if (sealed) {
     lobby.announce(`The last channel closes; construct ${room.id} flatlines into cold storage.`);
     if (room.finishedRecordings.length > 0) startScribe(room.id);
   } else {
@@ -241,6 +241,12 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
     case 'muteState': {
       const { room, peer } = requireJoined(state);
       room.addEvent(peer, msg.muted ? 'mute' : 'unmute', Number(msg.clientTimeMs) || undefined);
+      return {};
+    }
+
+    case 'deafenState': {
+      const { room, peer } = requireJoined(state);
+      room.addEvent(peer, msg.deafened ? 'deafen' : 'undeafen', Number(msg.clientTimeMs) || undefined);
       return {};
     }
 

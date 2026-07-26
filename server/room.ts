@@ -21,7 +21,7 @@ export interface RoomEvent {
   client_time_ms?: number; // client's claimed wallclock at the moment of action
   participant_id: string;
   display_name: string;
-  type: 'join' | 'leave' | 'mute' | 'unmute';
+  type: 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen';
 }
 
 export class Room {
@@ -31,6 +31,11 @@ export class Room {
   startedAt = Date.now();
   finishedRecordings: TrackRecording[] = [];
   events: RoomEvent[] = [];
+  // Leaves in progress: the peer is out of `peers` but their recording is
+  // still finalizing. The room isn't empty until these drain, or a
+  // same-moment double-leave seals the room before all tracks exist.
+  private pendingLeaves = 0;
+  private closed = false;
 
   constructor(id: string, router: mediasoup.types.Router) {
     this.id = id;
@@ -102,13 +107,18 @@ export class Room {
   async removePeer(peerId: string): Promise<void> {
     const peer = this.peers.get(peerId);
     if (!peer) return;
-    this.addEvent(peer, 'leave');
-    this.peers.delete(peerId);
-    for (const rec of peer.recordings) {
-      await rec.stop();
-      this.finishedRecordings.push(rec);
+    this.pendingLeaves++;
+    try {
+      this.addEvent(peer, 'leave');
+      this.peers.delete(peerId);
+      for (const rec of peer.recordings) {
+        await rec.stop();
+        this.finishedRecordings.push(rec);
+      }
+      for (const transport of peer.transports.values()) transport.close();
+    } finally {
+      this.pendingLeaves--;
     }
-    for (const transport of peer.transports.values()) transport.close();
   }
 
   broadcast(exceptPeerId: string | null, msg: unknown): void {
@@ -120,7 +130,7 @@ export class Room {
   }
 
   get isEmpty(): boolean {
-    return this.peers.size === 0;
+    return this.peers.size === 0 && this.pendingLeaves === 0;
   }
 
   // Writing metadata.json is what seals a room forever — it is written for
@@ -148,6 +158,8 @@ export class Room {
   }
 
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     this.writeMetadata();
     this.router.close();
   }
@@ -194,11 +206,11 @@ export class RoomManager {
     return room;
   }
 
-  async closeRoomIfEmpty(room: Room): Promise<void> {
-    if (room.isEmpty) {
-      this.rooms.delete(room.id);
-      room.close();
-      console.log(`[room ${room.id}] closed`);
-    }
+  async closeRoomIfEmpty(room: Room): Promise<boolean> {
+    if (!room.isEmpty || !this.rooms.has(room.id)) return false;
+    this.rooms.delete(room.id);
+    room.close();
+    console.log(`[room ${room.id}] closed`);
+    return true;
   }
 }

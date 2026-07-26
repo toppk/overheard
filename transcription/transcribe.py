@@ -112,8 +112,10 @@ def fmt_ts(ms: int) -> str:
 EVENT_PHRASES = {
     "join": "patches in",
     "leave": "drops the line",
-    "mute": "cuts the feed",
-    "unmute": "opens the feed",
+    "mute": "silences their mic",
+    "unmute": "opens their mic",
+    "deafen": "goes deaf",
+    "undeafen": "hears again",
 }
 
 

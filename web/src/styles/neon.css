@@ -69,6 +69,8 @@ a:hover, .cmd:hover {
   color: var(--magenta);
   text-shadow: 0 0 10px rgba(233, 79, 161, 0.5);
 }
+.cmd.danger { color: var(--red); }
+.cmd.danger:hover { text-shadow: 0 0 10px rgba(247, 86, 110, 0.6); }
 
 input {
   background: #060a0e;
@@ -94,6 +96,32 @@ li::before { content: '▸ '; color: var(--dim); }
 
 .meter { color: var(--cyan); white-space: pre; letter-spacing: 0.05em; }
 .meter .peak { color: var(--red); }
+
+/* The construct console: one row per audio flow, control attached to it. */
+.console {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.7rem 0;
+}
+.flow-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.flow-arrow {
+  color: var(--cyan);
+  display: inline-block;
+  width: 1.2em;
+  text-align: center;
+  transition: transform 80ms linear;
+}
+.flow-label { color: var(--dim); font-size: 0.85rem; letter-spacing: 0.1em; }
+.flow-toggle { font-size: 0.9rem; }
+/* A flow that's switched off: red arrow, red meter. For RX-while-deaf the
+   meter keeps moving — audio still arriving, just not being heard. */
+.flow-row.off .flow-arrow,
+.flow-row.off .meter { color: var(--red); opacity: 0.75; }
 
 .status-live { color: var(--cyan); }
 .status-sealed { color: var(--dim); }

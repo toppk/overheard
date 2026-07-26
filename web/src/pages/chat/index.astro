@@ -1,6 +1,5 @@
 ---
 import '../../styles/neon.css';
-import HelpDeck from '../../components/HelpDeck.astro';
 ---
 <html lang="en">
   <head>
@@ -35,21 +34,29 @@ import HelpDeck from '../../components/HelpDeck.astro';
 
     <div class="panel" style="display:none;" id="call-card">
       <div class="narrative" id="status2">…</div>
-      <div style="margin:0.7rem 0;">
-        your signal&nbsp; <span class="meter" id="meter"></span>
-        <span class="muted-flag" id="mute-flag" style="display:none;">&nbsp;(feed cut)</span>
+      <div class="console">
+        <div class="flow-row" id="tx-row">
+          <span class="flow-arrow" id="tx-arrow">▲</span>
+          <span class="flow-label">TX</span>
+          <span class="meter" id="tx-meter"></span>
+          <button class="cmd flow-toggle" id="mute-btn">silence your mic</button>
+        </div>
+        <div class="flow-row" id="rx-row">
+          <span class="flow-arrow" id="rx-arrow">▼</span>
+          <span class="flow-label">RX</span>
+          <span class="meter" id="rx-meter"></span>
+          <button class="cmd flow-toggle" id="deafen-btn">go deaf</button>
+        </div>
       </div>
       <div class="narrative">the construct is taping every channel.</div>
       <h2>operators on channel</h2>
       <ul id="peers"></ul>
-      <div style="display:flex; gap:1.2rem; margin-top:0.8rem;">
-        <button class="cmd" id="mute-btn">cut your feed</button>
-        <button class="cmd" id="leave-btn">drop the line</button>
+      <div style="margin-top:1.1rem; border-top:1px solid var(--border); padding-top:0.8rem;">
+        <button class="cmd danger" id="leave-btn">drop the line</button>
       </div>
     </div>
 
     <p id="grid-link"><a href="/">back to the grid</a></p>
-    <p class="narrative"><HelpDeck /></p>
 
     <script>
       import { Call } from '../../lib/call';
@@ -64,8 +71,6 @@ import HelpDeck from '../../components/HelpDeck.astro';
       const statusEl = document.getElementById('status')!;
       const status2El = document.getElementById('status2')!;
       const peersEl = document.getElementById('peers')!;
-      const meterEl = document.getElementById('meter')!;
-      const muteFlag = document.getElementById('mute-flag')!;
       const nameInput = document.getElementById('display-name') as HTMLInputElement;
       const muteBtn = document.getElementById('mute-btn') as HTMLButtonElement;
 
@@ -95,20 +100,35 @@ import HelpDeck from '../../components/HelpDeck.astro';
         nameInput.focus();
       });
 
-      const METER_CELLS = 24;
-      let lastMeter = -1;
-      function drawMeter(level: number) {
-        const n = Math.round(level * METER_CELLS);
-        if (n === lastMeter) return;
-        lastMeter = n;
-        const main = Math.min(n, METER_CELLS - 5);
-        const peak = Math.max(0, n - (METER_CELLS - 5));
-        meterEl.innerHTML =
-          '▕' + '█'.repeat(main) +
-          `<span class="peak">${'█'.repeat(peak)}</span>` +
-          '·'.repeat(METER_CELLS - main - peak) + '▏';
+      const METER_CELLS = 16;
+      function makeFlow(rowId: string, arrowId: string, meterId: string) {
+        const row = document.getElementById(rowId)!;
+        const arrow = document.getElementById(arrowId)!;
+        const meterEl = document.getElementById(meterId)!;
+        let lastN = -1;
+        return {
+          setOff(off: boolean) {
+            row.classList.toggle('off', off);
+          },
+          draw(level: number) {
+            const n = Math.round(level * METER_CELLS);
+            arrow.style.transform = `scale(${1 + level * 0.6})`;
+            arrow.style.textShadow = `0 0 ${4 + level * 22}px currentColor`;
+            if (n === lastN) return;
+            lastN = n;
+            const main = Math.min(n, METER_CELLS - 3);
+            const peak = Math.max(0, n - (METER_CELLS - 3));
+            meterEl.innerHTML =
+              '▕' + '█'.repeat(main) +
+              `<span class="peak">${'█'.repeat(peak)}</span>` +
+              '·'.repeat(METER_CELLS - main - peak) + '▏';
+          },
+        };
       }
-      drawMeter(0);
+      const tx = makeFlow('tx-row', 'tx-arrow', 'tx-meter');
+      const rx = makeFlow('rx-row', 'rx-arrow', 'rx-meter');
+      tx.draw(0);
+      rx.draw(0);
 
       const call = new Call({
         onStatus: (s) => {
@@ -127,7 +147,10 @@ import HelpDeck from '../../components/HelpDeck.astro';
             peersEl.appendChild(li);
           }
         },
-        onLevel: drawMeter,
+        onLevels: (txLevel, rxLevel) => {
+          tx.draw(txLevel);
+          rx.draw(rxLevel);
+        },
       });
 
       joinBtn.addEventListener('click', async () => {
@@ -157,9 +180,17 @@ import HelpDeck from '../../components/HelpDeck.astro';
 
       muteBtn.addEventListener('click', () => {
         const muted = call.toggleMute();
-        diag(`click: ${muted ? 'cut feed (muted)' : 'open feed (unmuted)'}`);
-        muteBtn.textContent = muted ? 'open your feed' : 'cut your feed';
-        muteFlag.style.display = muted ? 'inline' : 'none';
+        diag(`click: ${muted ? 'silence mic (muted)' : 'open mic (unmuted)'}`);
+        muteBtn.textContent = muted ? 'open your mic' : 'silence your mic';
+        tx.setOff(muted);
+      });
+
+      const deafenBtn = document.getElementById('deafen-btn') as HTMLButtonElement;
+      deafenBtn.addEventListener('click', () => {
+        const deaf = call.toggleDeafen();
+        diag(`click: ${deaf ? 'go deaf' : 'hear again'}`);
+        deafenBtn.textContent = deaf ? 'hear again' : 'go deaf';
+        rx.setOff(deaf);
       });
 
       document.getElementById('leave-btn')!.addEventListener('click', () => {

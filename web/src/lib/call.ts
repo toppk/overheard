@@ -7,8 +7,8 @@ type Signal = (type: string, data?: Record<string, unknown>) => Promise<any>;
 export interface CallEvents {
   onStatus: (status: string) => void;
   onPeerListChanged: (peers: { peerId: string; name: string }[]) => void;
-  /** Local mic level in [0, 1], called ~60x/s while in the call. */
-  onLevel?: (level: number) => void;
+  /** Outgoing (mic) and incoming (room mix) levels in [0, 1], ~60x/s. */
+  onLevels?: (tx: number, rx: number) => void;
 }
 
 export class Call {
@@ -23,6 +23,8 @@ export class Call {
   private nextRequestId = 1;
   private events: CallEvents;
   private audioCtx: AudioContext | null = null;
+  private rxAnalyser: AnalyserNode | null = null;
+  private rxSources = new Map<string, MediaStreamAudioSourceNode>();
   private levelRaf = 0;
 
   constructor(events: CallEvents) {
@@ -63,6 +65,22 @@ export class Call {
     return this.micTrack ? !this.micTrack.enabled : false;
   }
 
+  private deafened = false;
+
+  /**
+   * Deafen: stop hearing the room while still transmitting. Local playback
+   * mute only — primarily a diagnostics/testing aid (two devices in one
+   * physical room without feedback), but reported to the net like mutes are.
+   */
+  toggleDeafen(): boolean {
+    const clientTimeMs = Date.now();
+    this.deafened = !this.deafened;
+    for (const el of this.audioEls.values()) el.muted = this.deafened;
+    diag(`deafen toggled: ${this.deafened}`);
+    this.signal('deafenState', { deafened: this.deafened, clientTimeMs }).catch(() => {});
+    return this.deafened;
+  }
+
   toggleMute(): boolean {
     // Capture the wallclock BEFORE touching the track: this is the client's
     // claim of when the audio actually dropped/resumed, stored alongside the
@@ -75,22 +93,31 @@ export class Call {
   }
 
   private startLevelMeter(stream: MediaStream): void {
-    if (!this.events.onLevel) return;
+    if (!this.events.onLevels) return;
     // Called from the join-button click handler, so the AudioContext is
     // allowed to start (matters on iOS Safari).
     this.audioCtx = new AudioContext();
-    const analyser = this.audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    this.audioCtx.createMediaStreamSource(stream).connect(analyser);
-    const buf = new Float32Array(analyser.fftSize);
-    const tick = () => {
+    const txAnalyser = this.audioCtx.createAnalyser();
+    txAnalyser.fftSize = 1024;
+    this.audioCtx.createMediaStreamSource(stream).connect(txAnalyser);
+    // Incoming tracks are tapped into this analyser as they arrive (see
+    // consume()); analysis only — playback stays on the <audio> elements,
+    // so the RX meter keeps reading even while deafened.
+    this.rxAnalyser = this.audioCtx.createAnalyser();
+    this.rxAnalyser.fftSize = 1024;
+
+    const buf = new Float32Array(txAnalyser.fftSize);
+    const levelOf = (analyser: AnalyserNode): number => {
       analyser.getFloatTimeDomainData(buf);
       let sum = 0;
       for (const v of buf) sum += v * v;
       const rms = Math.sqrt(sum / buf.length);
       // Map -60..0 dBFS onto 0..1 so quiet speech still registers.
       const db = 20 * Math.log10(rms + 1e-8);
-      this.events.onLevel!(Math.min(1, Math.max(0, (db + 60) / 60)));
+      return Math.min(1, Math.max(0, (db + 60) / 60));
+    };
+    const tick = () => {
+      this.events.onLevels!(levelOf(txAnalyser), levelOf(this.rxAnalyser!));
       this.levelRaf = requestAnimationFrame(tick);
     };
     tick();
@@ -101,6 +128,8 @@ export class Call {
       this.signal('leave');
     } catch {}
     cancelAnimationFrame(this.levelRaf);
+    for (const src of this.rxSources.values()) src.disconnect();
+    this.rxSources.clear();
     this.audioCtx?.close().catch(() => {});
     this.micTrack?.stop();
     this.sendTransport?.close();
@@ -163,6 +192,11 @@ export class Call {
       if (el) {
         el.remove();
         this.audioEls.delete(msg.peerId);
+      }
+      const src = this.rxSources.get(msg.peerId);
+      if (src) {
+        src.disconnect();
+        this.rxSources.delete(msg.peerId);
       }
       this.emitPeers();
     } else if (msg.type === 'newProducer') {
@@ -230,11 +264,18 @@ export class Call {
 
     const el = document.createElement('audio');
     el.autoplay = true;
-    el.srcObject = new MediaStream([consumer.track]);
+    el.muted = this.deafened;
+    const stream = new MediaStream([consumer.track]);
+    el.srcObject = stream;
     document.body.appendChild(el);
     this.audioEls.set(peerId, el);
     // iOS Safari sometimes needs an explicit play() after a user gesture.
     el.play().catch(() => {});
+    if (this.audioCtx && this.rxAnalyser) {
+      const src = this.audioCtx.createMediaStreamSource(stream);
+      src.connect(this.rxAnalyser);
+      this.rxSources.set(peerId, src);
+    }
   }
 
   private emitPeers(): void {
