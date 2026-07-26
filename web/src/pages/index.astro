@@ -1,0 +1,206 @@
+---
+import '../styles/neon.css';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>overheard // the grid</title>
+  </head>
+  <body>
+    <h1>overheard // the grid</h1>
+    <p class="narrative">
+      The sky above the port is the color of a dead channel. You jack in.
+      Constructs hang in the grid like lit windows — some hot with voices,
+      some flatlined into cold storage, every word they ever held preserved.
+      There is no ICE here. Everyone sees everything; nothing is forgotten.
+    </p>
+
+    <div class="panel" id="name-panel">
+      <div>handle, operator?</div>
+      <div style="margin-top:0.5rem; display:flex; gap:0.6rem;">
+        <input id="name-input" placeholder="your handle" autocomplete="name" />
+        <button class="cmd" id="enter-btn">jack in</button>
+      </div>
+    </div>
+
+    <div id="commons" style="display:none;">
+      <div class="panel">
+        <button class="cmd" id="dig-btn">spin up a construct</button>
+        <span class="narrative" id="dig-hint"></span>
+      </div>
+
+      <h2>operators online</h2>
+      <ul id="users"><li class="narrative">…</li></ul>
+
+      <h2>hot constructs</h2>
+      <ul id="rooms"><li class="narrative">…</li></ul>
+
+      <h2>cold storage</h2>
+      <ul id="archives"><li class="narrative">…</li></ul>
+
+      <h2>grid traffic</h2>
+      <div class="log panel" id="events"></div>
+
+      <p class="narrative" style="margin-top:1.5rem;">
+        operating as <span id="whoami"></span> ·
+        <button class="cmd" id="logout-btn">jack out of the grid</button>
+      </p>
+    </div>
+
+    <script>
+      import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
+
+      diag('page load: / (the grid)', { referrer: document.referrer || '(none)' });
+      const namePanel = document.getElementById('name-panel')!;
+      const commons = document.getElementById('commons')!;
+      const nameInput = document.getElementById('name-input') as HTMLInputElement;
+      nameInput.value = getHandle() ?? '';
+
+      function fmtAgo(iso: string): string {
+        const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins}m ago`;
+        if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+        return `${Math.round(mins / 1440)}d ago`;
+      }
+
+      function render(state: any) {
+        const users = document.getElementById('users')!;
+        users.innerHTML = '';
+        for (const name of state.users) {
+          const li = document.createElement('li');
+          li.textContent = name;
+          users.appendChild(li);
+        }
+
+        const rooms = document.getElementById('rooms')!;
+        rooms.innerHTML = '';
+        if (!state.rooms.length) {
+          rooms.innerHTML = '<li class="narrative">the grid hums, empty. no constructs running.</li>';
+        }
+        for (const room of state.rooms) {
+          const li = document.createElement('li');
+          const voices = room.participants.length === 1
+            ? `${room.participants[0]} on channel`
+            : `${room.participants.join(', ')} on channel`;
+          li.innerHTML = `<span class="status-live">${room.roomId}</span> — ${voices} `;
+          const a = document.createElement('a');
+          a.href = `/chat/${room.roomId}`;
+          a.textContent = 'patch in';
+          li.appendChild(a);
+          rooms.appendChild(li);
+        }
+
+        const archives = document.getElementById('archives')!;
+        archives.innerHTML = '';
+        if (!state.archives.length) {
+          archives.innerHTML = '<li class="narrative">cold storage sits empty. nothing has flatlined yet.</li>';
+        }
+        for (const ar of state.archives) {
+          const li = document.createElement('li');
+          const who = ar.participants.length ? ar.participants.join(', ') : 'no one spoke';
+          const daemon =
+            ar.transcript === 'done' ? 'parsed'
+            : ar.transcript === 'running' ? '<span class="status-running">wintermute parsing…</span>'
+            : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
+            : 'unparsed';
+          li.innerHTML = `<span class="status-sealed">${ar.roomId}</span> — ${who} · flatlined ${fmtAgo(ar.endedAt)} · ${daemon} `;
+          const a = document.createElement('a');
+          a.href = `/archive/${ar.roomId}`;
+          a.textContent = 'access';
+          li.appendChild(a);
+          archives.appendChild(li);
+        }
+
+        const events = document.getElementById('events')!;
+        events.innerHTML = '';
+        for (const ev of [...state.events].reverse()) {
+          const div = document.createElement('div');
+          div.textContent = ev.text;
+          events.appendChild(div);
+        }
+      }
+
+      let ws: WebSocket | null = null;
+      let reconnect = true;
+
+      function connect(name: string) {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        diag(`lobby ws: connecting as ${JSON.stringify(name)}`);
+        ws = new WebSocket(`${proto}://${location.host}/ws`);
+        ws.onopen = () => {
+          diag('lobby ws: open, sending lobby.join');
+          ws!.send(JSON.stringify({ type: 'lobby.join', requestId: 1, name }));
+        };
+        ws.onmessage = (ev) => {
+          const msg = JSON.parse(ev.data);
+          const state = msg.type === 'lobby.state' ? msg
+            : msg.type === 'response' && msg.data?.type === 'lobby.state' ? msg.data
+            : null;
+          if (state) {
+            diag('lobby.state received', {
+              users: state.users.length,
+              rooms: state.rooms.length,
+              archives: state.archives.length,
+            });
+            render(state);
+          }
+        };
+        ws.onclose = () => {
+          diag(`lobby ws: closed (reconnect=${reconnect})`);
+          if (reconnect) setTimeout(() => connect(name), 3000);
+        };
+      }
+
+      function enterGrid(name: string) {
+        diag(`entering the grid as ${JSON.stringify(name)}`);
+        document.getElementById('whoami')!.textContent = name;
+        namePanel.style.display = 'none';
+        commons.style.display = 'block';
+        reconnect = true;
+        connect(name);
+      }
+
+      document.getElementById('enter-btn')!.addEventListener('click', () => {
+        const name = nameInput.value.trim() || 'null-handle';
+        diag(`click: jack in (input=${JSON.stringify(nameInput.value)} -> handle=${JSON.stringify(name)})`);
+        setHandle(name);
+        enterGrid(name);
+      });
+      nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('enter-btn')!.click();
+      });
+
+      // Jacking out of the grid is the footer operation: burn the stored
+      // handle and fall back to the login panel.
+      document.getElementById('logout-btn')!.addEventListener('click', () => {
+        diag('click: jack out of the grid');
+        clearHandle();
+        reconnect = false;
+        ws?.close();
+        nameInput.value = '';
+        commons.style.display = 'none';
+        namePanel.style.display = 'block';
+      });
+
+      // With a stored handle, skip the login panel: arriving at / (including
+      // returning from a construct) drops you straight into the lobby.
+      const storedName = getHandle();
+      if (storedName) {
+        enterGrid(storedName);
+      } else {
+        diag('no stored handle: showing login panel');
+      }
+
+      document.getElementById('dig-btn')!.addEventListener('click', async () => {
+        diag('click: spin up a construct');
+        const res = await fetch('/api/dig');
+        const { roomId } = await res.json();
+        diag(`construct name assigned: ${roomId}, navigating to /chat/${roomId}`);
+        document.getElementById('dig-hint')!.textContent = ` compiling ${roomId}…`;
+        setTimeout(() => (location.href = `/chat/${roomId}`), 400);
+      });
+    </script>
+  </body>
+</html>

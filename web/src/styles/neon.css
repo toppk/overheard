@@ -1,0 +1,111 @@
+:root {
+  --bg: #05070a;
+  --panel: #090d12;
+  --border: #14303a;
+  --text: #9db4c0;
+  --dim: #46606e;
+  --cyan: #4be4e4;
+  --magenta: #e94fa1;
+  --amber: #e0af68;
+  --red: #f7566e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, monospace;
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 46rem;
+  margin: 2.5rem auto;
+  padding: 0 1rem;
+}
+
+h1 {
+  color: var(--cyan);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  text-shadow: 0 0 12px rgba(75, 228, 228, 0.45);
+}
+h1::before { content: '// '; color: var(--dim); }
+
+h2 {
+  color: var(--magenta);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1.6rem 0 0.4rem;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 10px rgba(233, 79, 161, 0.35);
+}
+h2::before { content: '▚ '; color: var(--dim); text-shadow: none; }
+
+.narrative { color: var(--dim); font-style: italic; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.9rem 1.1rem;
+  margin: 0.8rem 0;
+  box-shadow: inset 0 0 24px rgba(20, 48, 58, 0.25);
+}
+
+a, .cmd {
+  color: var(--cyan);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 0;
+}
+a::before, .cmd::before { content: '< '; color: var(--dim); }
+a::after, .cmd::after { content: ' >'; color: var(--dim); }
+a:hover, .cmd:hover {
+  color: var(--magenta);
+  text-shadow: 0 0 10px rgba(233, 79, 161, 0.5);
+}
+
+input {
+  background: #060a0e;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--cyan);
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+}
+input:focus { outline: 1px solid var(--cyan); box-shadow: 0 0 12px rgba(75, 228, 228, 0.25); }
+
+ul { list-style: none; padding: 0; margin: 0.3rem 0; }
+li { padding: 0.12rem 0; }
+li::before { content: '▸ '; color: var(--dim); }
+
+.log {
+  color: var(--dim);
+  font-size: 0.85rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.log div::before { content: '>> '; }
+
+.meter { color: var(--cyan); white-space: pre; letter-spacing: 0.05em; }
+.meter .peak { color: var(--red); }
+
+.status-live { color: var(--cyan); }
+.status-sealed { color: var(--dim); }
+.status-running { color: var(--amber); }
+.status-failed { color: var(--red); }
+
+.muted-flag { color: var(--red); }
+
+pre.transcript {
+  white-space: pre-wrap;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }

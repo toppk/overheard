@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.astro/
+recordings/
+certs/
+*.log
+__pycache__/
+.venv/
+nohup.out

@@ -1,0 +1,96 @@
+---
+import '../../styles/neon.css';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>overheard // cold storage</title>
+  </head>
+  <body>
+    <h1>cold storage // <span id="room-name"></span></h1>
+    <p class="narrative">
+      A flatlined construct. Its run is over; what was said inside is kept
+      below, exactly as it went to tape.
+    </p>
+
+    <div id="content"><p class="narrative">reading cold storage…</p></div>
+
+    <p><a href="/">back to the grid</a></p>
+
+    <script>
+      const roomId = location.pathname.split('/').filter(Boolean).pop()!;
+      document.getElementById('room-name')!.textContent = roomId;
+      const content = document.getElementById('content')!;
+
+      async function load() {
+        const res = await fetch(`/api/archives/${roomId}`);
+        if (!res.ok) {
+          content.innerHTML = '<p class="narrative">no such construct in cold storage.</p>';
+          return;
+        }
+        const { metadata, transcript, conversation } = await res.json();
+        content.innerHTML = '';
+
+        const info = document.createElement('div');
+        info.className = 'panel';
+        const started = new Date(metadata.started_at).toLocaleString();
+        const mins = Math.max(1, Math.round(
+          (new Date(metadata.ended_at).getTime() - new Date(metadata.started_at).getTime()) / 60000));
+        const names = [...new Set(metadata.tracks.map((t: any) => t.display_name))].join(', ') || 'no one';
+        info.innerHTML = `operators: ${names}<br>ran ${started} · ~${mins} min · ${metadata.tracks.length} taped channel(s)`;
+        content.appendChild(info);
+
+        const h2t = document.createElement('h2');
+        h2t.textContent = 'transcript dump';
+        content.appendChild(h2t);
+
+        if (transcript === 'done' && conversation) {
+          const pre = document.createElement('pre');
+          pre.className = 'transcript panel';
+          pre.textContent = conversation;
+          content.appendChild(pre);
+          const links = document.createElement('p');
+          links.innerHTML = `<a href="/recordings/${roomId}/transcripts/canonical.json">structured dump (json)</a>`;
+          content.appendChild(links);
+        } else {
+          const p = document.createElement('p');
+          p.className = 'narrative';
+          p.innerHTML =
+            transcript === 'running' ? '<span class="status-running">wintermute is still parsing… (this page will refresh)</span>'
+            : transcript === 'failed' ? '<span class="status-failed">wintermute choked on the tapes. </span>'
+            : 'wintermute has not touched these tapes yet. ';
+          content.appendChild(p);
+          if (transcript === 'running') {
+            setTimeout(load, 5000);
+          } else if (metadata.tracks.length > 0) {
+            const btn = document.createElement('button');
+            btn.className = 'cmd';
+            btn.textContent = 'wake wintermute';
+            btn.addEventListener('click', async () => {
+              await fetch(`/api/archives/${roomId}/transcribe`, { method: 'POST' });
+              load();
+            });
+            p.appendChild(btn);
+          }
+        }
+
+        if (metadata.tracks.length > 0) {
+          const h2a = document.createElement('h2');
+          h2a.textContent = 'raw channels';
+          content.appendChild(h2a);
+          for (const t of metadata.tracks) {
+            const div = document.createElement('div');
+            div.innerHTML = `${t.display_name} — on channel at +${Math.round(t.room_time_start_ms / 1000)}s`;
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = `/recordings/${roomId}/${t.file}`;
+            div.appendChild(audio);
+            content.appendChild(div);
+          }
+        }
+      }
+      load();
+    </script>
+  </body>
+</html>

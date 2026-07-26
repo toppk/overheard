@@ -1,0 +1,175 @@
+---
+import '../../styles/neon.css';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>overheard // construct</title>
+  </head>
+  <body>
+    <h1>construct <span id="room-name"></span></h1>
+
+    <div class="panel" id="join-card">
+      <p class="narrative">
+        A live construct. Every channel inside is taped — every word kept on
+        local iron. When the last operator drops the line, the construct
+        flatlines into cold storage and wintermute parses the tapes. No
+        second run.
+      </p>
+      <div style="display:flex; gap:0.6rem; align-items:center;">
+        <input id="display-name" placeholder="alias inside this construct" autocomplete="off" />
+        <button class="cmd" id="join-btn">patch in</button>
+        <button class="cmd" id="change-handle-btn" style="display:none; font-size:0.85rem;">use an alias</button>
+      </div>
+      <p class="narrative" id="alias-note" style="display:none; margin:0.4rem 0 0; font-size:0.85rem;">
+        the construct only ever knows the alias. your grid handle stays out of the tape.
+      </p>
+      <div class="narrative" id="status" style="margin-top:0.5rem;">carrier idle.</div>
+      <div id="sealed-note" style="display:none; margin-top:0.5rem;">
+        This construct flatlined. Its run is over and can't be restarted.
+        <a id="sealed-link" href="#">access cold storage</a>
+      </div>
+    </div>
+
+    <div class="panel" style="display:none;" id="call-card">
+      <div class="narrative" id="status2">…</div>
+      <div style="margin:0.7rem 0;">
+        your signal&nbsp; <span class="meter" id="meter"></span>
+        <span class="muted-flag" id="mute-flag" style="display:none;">&nbsp;(feed cut)</span>
+      </div>
+      <div class="narrative">the construct is taping every channel.</div>
+      <h2>operators on channel</h2>
+      <ul id="peers"></ul>
+      <div style="display:flex; gap:1.2rem; margin-top:0.8rem;">
+        <button class="cmd" id="mute-btn">cut your feed</button>
+        <button class="cmd" id="leave-btn">drop the line</button>
+      </div>
+    </div>
+
+    <p id="grid-link"><a href="/">back to the grid</a></p>
+
+    <script>
+      import { Call } from '../../lib/call';
+      import { diag, getHandle } from '../../lib/diag';
+
+      const roomId = location.pathname.split('/').filter(Boolean).pop()!;
+      diag(`page load: /chat/${roomId} (construct)`, { referrer: document.referrer || '(none)' });
+      document.getElementById('room-name')!.textContent = roomId;
+
+      const joinCard = document.getElementById('join-card')!;
+      const callCard = document.getElementById('call-card')!;
+      const statusEl = document.getElementById('status')!;
+      const status2El = document.getElementById('status2')!;
+      const peersEl = document.getElementById('peers')!;
+      const meterEl = document.getElementById('meter')!;
+      const muteFlag = document.getElementById('mute-flag')!;
+      const nameInput = document.getElementById('display-name') as HTMLInputElement;
+      const muteBtn = document.getElementById('mute-btn') as HTMLButtonElement;
+
+      // Two identities, on purpose: the operator handle belongs to the grid;
+      // inside a construct you can be whoever you want. The alias typed here
+      // is used for this join only and is NEVER written back to the stored
+      // handle — the tape records the alias, nothing links it to the grid.
+      const storedHandle = getHandle();
+      const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
+      const changeBtn = document.getElementById('change-handle-btn') as HTMLButtonElement;
+      nameInput.value = storedHandle ?? '';
+      if (storedHandle) {
+        nameInput.style.display = 'none';
+        joinBtn.textContent = `patch in as ${storedHandle}`;
+        changeBtn.style.display = 'inline';
+      }
+      nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') joinBtn.click();
+      });
+      changeBtn.addEventListener('click', () => {
+        diag('click: use an alias (revealing alias input)');
+        nameInput.style.display = 'inline-block';
+        nameInput.value = '';
+        changeBtn.style.display = 'none';
+        document.getElementById('alias-note')!.style.display = 'block';
+        joinBtn.textContent = 'patch in';
+        nameInput.focus();
+      });
+
+      const METER_CELLS = 24;
+      let lastMeter = -1;
+      function drawMeter(level: number) {
+        const n = Math.round(level * METER_CELLS);
+        if (n === lastMeter) return;
+        lastMeter = n;
+        const main = Math.min(n, METER_CELLS - 5);
+        const peak = Math.max(0, n - (METER_CELLS - 5));
+        meterEl.innerHTML =
+          '▕' + '█'.repeat(main) +
+          `<span class="peak">${'█'.repeat(peak)}</span>` +
+          '·'.repeat(METER_CELLS - main - peak) + '▏';
+      }
+      drawMeter(0);
+
+      const call = new Call({
+        onStatus: (s) => {
+          diag(`call status: ${s}`);
+          statusEl.textContent = s;
+          status2El.textContent = s;
+        },
+        onPeerListChanged: (peers) => {
+          peersEl.innerHTML = '';
+          const me = document.createElement('li');
+          me.textContent = `${nameInput.value || 'you'} (you)`;
+          peersEl.appendChild(me);
+          for (const p of peers) {
+            const li = document.createElement('li');
+            li.textContent = p.name;
+            peersEl.appendChild(li);
+          }
+        },
+        onLevel: drawMeter,
+      });
+
+      joinBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim() || 'null-handle';
+        const aliased = name !== storedHandle;
+        diag(`click: patch in (name=${JSON.stringify(name)}, ${aliased ? 'alias — grid handle untouched' : 'operator handle'})`);
+        try {
+          await call.join(roomId, name);
+          diag('patched into construct successfully');
+          joinCard.style.display = 'none';
+          callCard.style.display = 'block';
+          // On channel there is exactly one exit: drop the line.
+          document.getElementById('grid-link')!.style.display = 'none';
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          diag(`join failed: ${message}`);
+          if (message === 'sealed') {
+            statusEl.textContent = '';
+            const note = document.getElementById('sealed-note')!;
+            note.style.display = 'block';
+            (document.getElementById('sealed-link') as HTMLAnchorElement).href = `/archive/${roomId}`;
+          } else {
+            statusEl.textContent = `no carrier: ${message}`;
+          }
+        }
+      });
+
+      muteBtn.addEventListener('click', () => {
+        const muted = call.toggleMute();
+        diag(`click: ${muted ? 'cut feed (muted)' : 'open feed (unmuted)'}`);
+        muteBtn.textContent = muted ? 'open your feed' : 'cut your feed';
+        muteFlag.style.display = muted ? 'inline' : 'none';
+      });
+
+      document.getElementById('leave-btn')!.addEventListener('click', () => {
+        diag('click: drop the line, leaving call and returning to the grid');
+        call.leave();
+        location.href = '/';
+      });
+
+      window.addEventListener('beforeunload', () => {
+        diag('beforeunload: leaving call');
+        call.leave();
+      });
+    </script>
+  </body>
+</html>
