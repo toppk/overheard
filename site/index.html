@@ -51,6 +51,13 @@
   .legend .warn { color: var(--amber); }
   code { color: var(--cyan); background: rgba(75,228,228,0.07); padding: 0.05rem 0.3rem; border-radius: 2px; }
   pre.mermaid { margin: 0; }
+  pre.art {
+    margin: 0;
+    color: var(--cyan);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    text-shadow: 0 0 6px rgba(75, 228, 228, 0.25);
+  }
 </style>
 </head>
 <body>
@@ -84,114 +91,68 @@
 </ul>
 
 <h2>page &amp; view navigation</h2>
-<p class="legend">
-  Every box is a view the operator can see; edges are clicks or automatic
-  routing. <span class="live">cyan border = live call path</span> ·
-  <span class="warn">amber = wintermute at work</span>
-</p>
 <div class="panel">
-<pre class="mermaid">
-%%{init: {"theme": "base", "themeVariables": {
-  "background": "#05070a",
-  "primaryColor": "#cfe9ec",
-  "primaryTextColor": "#05070a",
-  "primaryBorderColor": "#4be4e4",
-  "secondaryColor": "#cfe9ec",
-  "tertiaryColor": "#cfe9ec",
-  "textColor": "#9db4c0",
-  "lineColor": "#46606e",
-  "clusterBkg": "#070b10",
-  "clusterBorder": "#14303a",
-  "edgeLabelBackground": "#05070a",
-  "fontFamily": "ui-monospace, Menlo, monospace",
-  "fontSize": "13px"
-}}}%%
-flowchart TD
-  subgraph GRID ["/  — the grid"]
-    LOGIN["login view<br/><i>handle, operator?</i>"]
-    LOBBY["lobby view<br/>operators · hot constructs ·<br/>cold storage · grid traffic<br/><i>footer: jack out of the grid</i>"]
-  end
-
-  subgraph CHAT ["/chat/&lcub;id&rcub;  — construct"]
-    JOIN["join view<br/><i>patch in as &lt;handle&gt;</i><br/>or under an alias —<br/>alias never touches the grid handle"]
-    CALL["in-call view<br/>VU meter · operators on channel ·<br/>cut feed · drop the line"]
-    SEALEDNOTE["flatlined notice<br/><i>no second run</i>"]
-  end
-
-  subgraph ARCH ["/archive/&lcub;id&rcub;  — cold storage"]
-    PARSED["transcript dump<br/>+ raw channels + json"]
-    PARSING["wintermute parsing…<br/><i>auto-refreshes 5s</i>"]
-    UNPARSED["unparsed / parse failed<br/><i>wake wintermute</i>"]
-    NOTFOUND["no such construct"]
-  end
-
-  ENTRY(["browser opens /"]) --> HANDLE{"stored<br/>handle?"}
-  HANDLE -- "yes — auto-enter" --> LOBBY
-  HANDLE -- "no" --> LOGIN
-  LOGIN -- "jack in (stores handle)" --> LOBBY
-  LOBBY -- "jack out of the grid<br/>(burns handle)" --> LOGIN
-
-  LOBBY -- "spin up a construct<br/>GET /api/dig → navigate" --> JOIN
-  LOBBY -- "patch in (hot construct)" --> JOIN
-  LOBBY -- "access (cold storage)" --> PARSED
-
-  JOIN -- "patch in: mic permission<br/>+ ws join ok" --> CALL
-  JOIN -- "join rejected: sealed" --> SEALEDNOTE
-  SEALEDNOTE -- "access cold storage" --> PARSED
-  CALL -- "drop the line / close tab<br/>→ leave, navigate /" --> LOBBY
-  JOIN -- "back to the grid" --> LOBBY
-
-  PARSED -.->|"back to the grid"| LOBBY
-  PARSING -- "parse finishes" --> PARSED
-  UNPARSED -- "wake wintermute<br/>POST …/transcribe" --> PARSING
-
-  classDef live stroke:#4be4e4,stroke-width:2px,fill:#d9f5f5,color:#05070a;
-  classDef warn stroke:#e0af68,fill:#f0e4c4,color:#1a1408;
-  classDef ghost stroke:#46606e,fill:#131a1f,color:#9db4c0;
-  class CALL,JOIN live;
-  class PARSING warn;
-  class NOTFOUND ghost;
+<pre class="art">
+ browser opens /
+    │
+    ├── no handle stored ──▶ [ login — "handle, operator?" ]
+    │                                     │  jack in
+    ▼                                     ▼  (stores handle)
+ ┌────────────────────────────────────────────────┐
+ │  THE GRID (lobby)                              │
+ │  operators online · hot constructs ·           │◀──────────┐
+ │  cold storage (last 24h) · grid traffic        │           │
+ │  footer: jack out of the grid = burn handle    │           │
+ └────────┬──────────────────────┬────────────────┘           │
+          │ spin up a construct, │ access an archive,         │
+          │ or patch into a      │ or query the stacks        │
+          │ hot one              ▼                            │
+          │             ┌─────────────────────────┐           │
+          │             │  COLD STORAGE           │           │
+          │             │  /storage — filters +   │           │
+          │             │  full-text search       │           │
+          │             │  /archive/{id} —        │           │
+          │             │  transcript dump ·      │           │
+          │             │  raw channels           │           │
+          │             └────────────▲────────────┘           │
+          ▼                          │                        │
+ ┌─────────────────────┐             │ flatlined construct?   │
+ │  CONSTRUCT          │─────────────┘ "the door is sealed"   │
+ │  patch in as your   │               → access cold storage  │
+ │  handle, or under   │                                      │
+ │  an alias (never    │                                      │
+ │  linked to handle)  │                                      │
+ └─────────┬───────────┘                                      │
+           │ mic granted, carrier confirmed                   │
+           ▼                                                  │
+ ┌─────────────────────┐                                      │
+ │  IN CALL            │                                      │
+ │  TX/RX console ·    │────────── drop the line ─────────────┘
+ │  every channel taped│
+ └─────────────────────┘
 </pre>
 </div>
 
 <h2>construct lifecycle — one way, no second run</h2>
-<p class="legend">
-  Server-side truth. <code>metadata.json</code> on disk is what makes a
-  flatline permanent: the id can never be joined or reused.
-</p>
 <div class="panel">
-<pre class="mermaid">
-%%{init: {"theme": "base", "themeVariables": {
-  "background": "#05070a",
-  "primaryColor": "#cfe9ec",
-  "primaryTextColor": "#05070a",
-  "primaryBorderColor": "#4be4e4",
-  "secondaryColor": "#cfe9ec",
-  "tertiaryColor": "#cfe9ec",
-  "textColor": "#9db4c0",
-  "lineColor": "#46606e",
-  "noteBkgColor": "#f0e4c4",
-  "noteTextColor": "#1a1408",
-  "noteBorderColor": "#e0af68",
-  "fontFamily": "ui-monospace, Menlo, monospace",
-  "fontSize": "13px"
-}}}%%
-stateDiagram-v2
-  [*] --> unclaimed : name minted by GET /api/dig
-  unclaimed --> hot : first patch-in<br/>(router created, taping starts per producer)
-  hot --> hot : operators patch in / drop<br/>(≥1 channel still open)
-  hot --> flatlined : last operator drops the line<br/>metadata.json written — PERMANENT
-  flatlined --> parsing : wintermute wakes<br/>(auto when tracks &gt; 0)
-  flatlined --> [*] : nothing taped<br/>(empty archive, no parse)
-  parsing --> parsed : exit 0 — transcript committed
-  parsing --> parse_failed : nonzero exit<br/>(log kept per room)
-  parse_failed --> parsing : wake wintermute<br/>POST /api/archives/&lcub;id&rcub;/transcribe
-  parsed --> [*]
-
-  note right of flatlined
-    join attempts now
-    rejected: "sealed"
-  end note
+<pre class="art">
+ unclaimed ─── first patch-in ───▶ HOT ◀──┐
+ (name minted                      │      │ operators patch in / drop
+  by /api/dig)                     │      │ (≥1 channel still open)
+                                   │──────┘
+                                   │
+                     last operator drops the line
+                                   │
+                                   ▼
+              FLATLINED — permanent. no second run.
+              metadata.json is the seal; joins now refused
+                                   │
+                     anything taped? wintermute wakes
+                                   │
+                                   ▼
+        PARSING ──── ok ────▶ PARSED — transcript in cold storage
+           │
+           └── fail ──▶ PARSE FAILED ── "wake wintermute" ──▶ retry
 </pre>
 </div>
 
