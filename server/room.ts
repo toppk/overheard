@@ -14,11 +14,14 @@ export interface Peer {
   producers: Map<string, mediasoup.types.Producer>;
   consumers: Map<string, mediasoup.types.Consumer>;
   recordings: TrackRecording[];
+  /** serverClock - clientClock, measured by the client at join. */
+  clockOffsetMs?: number;
 }
 
 export interface RoomEvent {
   room_time_ms: number; // server receipt time, room-relative
-  client_time_ms?: number; // client's claimed wallclock at the moment of action
+  client_time_ms?: number; // client's claimed wallclock (client clock, raw)
+  claim_server_ms?: number; // the claim translated onto the server clock
   participant_id: string;
   display_name: string;
   type: 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen';
@@ -61,6 +64,10 @@ export class Room {
     this.events.push({
       room_time_ms: Date.now() - this.startedAt,
       ...(clientTimeMs !== undefined && { client_time_ms: clientTimeMs }),
+      ...(clientTimeMs !== undefined &&
+        peer.clockOffsetMs !== undefined && {
+          claim_server_ms: Math.round(clientTimeMs + peer.clockOffsetMs),
+        }),
       participant_id: peer.id,
       display_name: peer.name,
       type,
@@ -148,6 +155,7 @@ export class Room {
         file: rec.file,
         room_time_start_ms: rec.roomTimeStartMs,
         room_time_end_ms: rec.roomTimeEndMs ?? null,
+        ...(rec.rtp && { rtp: rec.rtp }),
       })),
       // Non-speech events on the same room timeline. mute/unmute are client
       // CLAIMS (stamped on receipt; client_time_ms is what the client says).

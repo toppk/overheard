@@ -43,6 +43,17 @@ export class Call {
     await this.connectWebSocket();
 
     const joinInfo = await this.signal('join', { roomId, name });
+
+    // Measure our clock offset against the server (NTP-style single ping)
+    // so event claims can be translated onto the server clock. Half the
+    // round trip is the residual error bound.
+    const t0 = Date.now();
+    const { serverTime } = await this.signal('clockPing');
+    const t1 = Date.now();
+    const offsetMs = serverTime - (t0 + t1) / 2;
+    diag(`clock sync: offset ${offsetMs.toFixed(0)}ms, rtt ${t1 - t0}ms`);
+    this.signal('clockOffset', { offsetMs, rttMs: t1 - t0 }).catch(() => {});
+
     await this.device.load({ routerRtpCapabilities: joinInfo.routerRtpCapabilities });
 
     this.sendTransport = await this.createTransport('send');

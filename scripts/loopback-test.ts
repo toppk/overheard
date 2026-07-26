@@ -61,6 +61,11 @@ console.log('sender finished');
 const stopStart = Date.now();
 await rec.stop();
 console.log(`stop() finalized the track in ${Date.now() - stopStart}ms`);
+console.log('track timing:', {
+  roomTimeStartMs: rec.roomTimeStartMs,
+  roomTimeEndMs: rec.roomTimeEndMs,
+  rtp: rec.rtp,
+});
 producer.close();
 worker.close();
 

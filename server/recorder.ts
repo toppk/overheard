@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import * as dgram from 'node:dgram';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as mediasoup from 'mediasoup';
@@ -18,7 +19,45 @@ export interface TrackRecording {
   file: string;
   roomTimeStartMs: number;
   roomTimeEndMs?: number;
+  /** RTP-clock anchoring detail, for provenance and reprocessing. */
+  rtp?: { clockRate: number; timestampStart: number; anchorMethod: string };
   stop: () => Promise<void>;
+}
+
+const RTP_CLOCK = 48000; // opus RTP clock rate, ticks per second
+
+/**
+ * Relays RTP from mediasoup to ffmpeg while learning, from the packets
+ * themselves, exactly when the recording's t=0 happened on the server
+ * clock. Anchor = min over early packets of (arrival - rtp_elapsed):
+ * network/scheduler jitter only ever delays a packet, so the minimum
+ * converges on the true offset from below.
+ */
+function createTimingRelay(relaySocket: dgram.Socket, ffmpegRtpPort: number) {
+  const state = {
+    rtpTimestampStart: null as number | null,
+    anchorWallclockMs: Infinity,
+    lastRtpElapsedMs: 0,
+    samples: 0,
+  };
+  relaySocket.on('message', (buf) => {
+    if (buf.length >= 12 && buf[0] >> 6 === 2) {
+      const ts = buf.readUInt32BE(4);
+      if (state.rtpTimestampStart === null) state.rtpTimestampStart = ts;
+      // 32-bit wrap-safe delta; ignore pre-start reordered packets.
+      const delta = (ts - state.rtpTimestampStart + 2 ** 32) % 2 ** 32;
+      if (delta < 2 ** 31) {
+        const elapsedMs = (delta / RTP_CLOCK) * 1000;
+        state.lastRtpElapsedMs = Math.max(state.lastRtpElapsedMs, elapsedMs);
+        if (state.samples < 500) {
+          state.anchorWallclockMs = Math.min(state.anchorWallclockMs, Date.now() - elapsedMs);
+          state.samples++;
+        }
+      }
+    }
+    relaySocket.send(buf, ffmpegRtpPort, '127.0.0.1');
+  });
+  return state;
 }
 
 /**
@@ -44,18 +83,28 @@ export async function recordProducer(opts: {
   const dir = path.join(config.recordingsDir, roomId, 'tracks');
   fs.mkdirSync(dir, { recursive: true });
 
-  const rtpPort = allocPortPair();
+  // Three local ports: mediasoup -> relay (timing tap) -> ffmpeg RTP, and
+  // mediasoup RTCP straight to ffmpeg's RTCP port.
+  const relayPort = allocPortPair();
+  const ffmpegRtpPort = allocPortPair();
   const roomTimeStartMs = Date.now() - roomStartedAt;
   const base = `${participantId}-${roomTimeStartMs}`;
   const oggFile = path.join(dir, `${base}.ogg`);
   const sdpFile = path.join(dir, `${base}.sdp`);
+
+  const relaySocket = dgram.createSocket('udp4');
+  const timing = createTimingRelay(relaySocket, ffmpegRtpPort);
+  await new Promise<void>((resolve, reject) => {
+    relaySocket.once('error', reject);
+    relaySocket.bind(relayPort, '127.0.0.1', resolve);
+  });
 
   const transport = await router.createPlainTransport({
     listenIp: '127.0.0.1',
     rtcpMux: false,
     comedia: false,
   });
-  await transport.connect({ ip: '127.0.0.1', port: rtpPort, rtcpPort: rtpPort + 1 });
+  await transport.connect({ ip: '127.0.0.1', port: relayPort, rtcpPort: ffmpegRtpPort + 1 });
 
   const consumer = await transport.consume({
     producerId: producer.id,
@@ -71,9 +120,9 @@ export async function recordProducer(opts: {
     's=overheard-recording',
     'c=IN IP4 127.0.0.1',
     't=0 0',
-    `m=audio ${rtpPort} RTP/AVP ${payloadType}`,
+    `m=audio ${ffmpegRtpPort} RTP/AVP ${payloadType}`,
     `a=rtpmap:${payloadType} opus/48000/2`,
-    `a=rtcp:${rtpPort + 1}`,
+    `a=rtcp:${ffmpegRtpPort + 1}`,
     'a=recvonly',
     '',
   ].join('\n');
@@ -111,9 +160,8 @@ export async function recordProducer(opts: {
   // Give ffmpeg a moment to bind its UDP port before media flows.
   await new Promise((r) => setTimeout(r, 500));
   await consumer.resume();
-  // Track timing is anchored to when media can actually flow (post-resume),
-  // not when this function started — the difference (~800ms) shows up as
-  // transcript timestamps drifting early against room events.
+  // Provisional anchor (post-resume wallclock); replaced at stop() by the
+  // RTP-derived anchor once the relay has observed real packets.
   const mediaStartMs = Date.now() - roomStartedAt;
 
   console.log(`[rec] recording ${displayName} (${participantId}) -> ${oggFile}`);
@@ -127,9 +175,25 @@ export async function recordProducer(opts: {
     stop: async () => {
       if (stopped) return;
       stopped = true;
-      recording.roomTimeEndMs = Date.now() - roomStartedAt;
+      // Prefer the packet-derived anchor: it maps the file's t=0 onto the
+      // server clock to within one-way jitter, instead of ~half a second
+      // of pipeline-startup guesswork.
+      if (timing.anchorWallclockMs !== Infinity && timing.rtpTimestampStart !== null) {
+        recording.roomTimeStartMs = Math.round(timing.anchorWallclockMs - roomStartedAt);
+        recording.roomTimeEndMs = Math.round(
+          recording.roomTimeStartMs + timing.lastRtpElapsedMs + 20,
+        );
+        recording.rtp = {
+          clockRate: RTP_CLOCK,
+          timestampStart: timing.rtpTimestampStart,
+          anchorMethod: 'min-offset-over-first-500-packets',
+        };
+      } else {
+        recording.roomTimeEndMs = Date.now() - roomStartedAt;
+      }
       consumer.close();
       transport.close();
+      relaySocket.close();
       // Ask ffmpeg to finish; whether it exits via SIGINT, rw_timeout, or
       // the SIGKILL backstop does not affect file validity (flush_packets),
       // but WAIT for the exit before resolving: callers (room close ->

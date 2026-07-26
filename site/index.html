@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>overheard — voice rooms that remember</title>
+<style>
+  :root {
+    --bg: #05070a; --panel: #090d12; --border: #14303a; --text: #9db4c0;
+    --dim: #46606e; --cyan: #4be4e4; --magenta: #e94fa1; --amber: #e0af68;
+  }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, monospace;
+    font-size: 15px; line-height: 1.55; max-width: 56rem; margin: 2.5rem auto; padding: 0 1rem;
+  }
+  h1 {
+    color: var(--cyan); font-size: 1.2rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: lowercase; text-shadow: 0 0 12px rgba(75,228,228,0.45);
+  }
+  h1::before { content: '// '; color: var(--dim); }
+  h2 {
+    color: var(--magenta); font-size: 0.95rem; font-weight: 600; margin: 2rem 0 0.4rem;
+    letter-spacing: 0.06em; text-shadow: 0 0 10px rgba(233,79,161,0.35);
+  }
+  h2::before { content: '\259A  '; color: var(--dim); text-shadow: none; }
+  .narrative { color: var(--dim); font-style: italic; max-width: 65ch; }
+  p, li { max-width: 70ch; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 2px;
+    padding: 0.9rem 1.1rem; margin: 0.8rem 0;
+    box-shadow: inset 0 0 24px rgba(20,48,58,0.25); overflow-x: auto;
+  }
+  a { color: var(--cyan); text-decoration: none; }
+  a::before { content: '< '; color: var(--dim); }
+  a::after { content: ' >'; color: var(--dim); }
+  a:hover { color: var(--magenta); }
+  ul { list-style: none; padding: 0; }
+  li::before { content: '▸ '; color: var(--dim); }
+  b { color: var(--cyan); font-weight: 600; }
+  .legend { color: var(--dim); font-size: 0.85rem; }
+  .legend .live { color: var(--cyan); }
+  .legend .warn { color: var(--amber); }
+  code { color: var(--cyan); background: rgba(75,228,228,0.07); padding: 0.05rem 0.3rem; border-radius: 2px; }
+  pre.mermaid { margin: 0; }
+</style>
+</head>
+<body>
+<h1>overheard</h1>
+<p class="narrative">
+  Self-hosted voice rooms that remember. The sky above the port is the color
+  of a dead channel; every construct on this grid tapes every channel, and
+  when the last operator drops the line, a daemon writes down everything
+  that was said — who said it, when, and who was talking over whom.
+</p>
+
+<h2>what it is</h2>
+<ul>
+  <li><b>browser voice rooms</b> — WebRTC/Opus through a self-hosted mediasoup SFU; no vendor, no app.</li>
+  <li><b>per-speaker tapes</b> — every participant recorded as a separate identified Ogg/Opus track, RTP-clock-anchored to a shared room timeline.</li>
+  <li><b>honest transcripts</b> — offline whisper per track, merged with real overlap detection; simultaneous speech is marked, never flattened into false turn-taking.</li>
+  <li><b>stage directions</b> — mutes, deafens, joins and leaves land in the transcript where they actually happened.</li>
+  <li><b>radical transparency</b> — no accounts, no private rooms: everyone on an instance sees and hears everything. Not a Zoom. New rules.</li>
+</ul>
+<p>
+  <a href="https://github.com/toppk/overheard">source on github</a>
+  <a href="https://github.com/toppk/overheard/blob/main/SECURITY.md">security posture</a>
+</p>
+
+<h2>the verb ladder</h2>
+<ul>
+  <li><b>jack in / jack out</b> — enter the grid, or burn your handle.</li>
+  <li><b>patch in / drop the line</b> — join a construct (under your handle or any alias), or leave it.</li>
+  <li><b>silence your mic · go deaf</b> — cut what you send, or what you hear. The tape notes both.</li>
+  <li><b>flatline</b> — when the last operator leaves, the construct seals forever and wintermute parses the tapes into cold storage.</li>
+</ul>
+
+<h2>page &amp; view navigation</h2>
+<p class="legend">
+  Every box is a view the operator can see; edges are clicks or automatic
+  routing. <span class="live">cyan border = live call path</span> ·
+  <span class="warn">amber = wintermute at work</span>
+</p>
+<div class="panel">
+<pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {
+  "background": "#05070a",
+  "primaryColor": "#cfe9ec",
+  "primaryTextColor": "#05070a",
+  "primaryBorderColor": "#4be4e4",
+  "secondaryColor": "#cfe9ec",
+  "tertiaryColor": "#cfe9ec",
+  "textColor": "#9db4c0",
+  "lineColor": "#46606e",
+  "clusterBkg": "#070b10",
+  "clusterBorder": "#14303a",
+  "edgeLabelBackground": "#05070a",
+  "fontFamily": "ui-monospace, Menlo, monospace",
+  "fontSize": "13px"
+}}}%%
+flowchart TD
+  subgraph GRID ["/  — the grid"]
+    LOGIN["login view<br/><i>handle, operator?</i>"]
+    LOBBY["lobby view<br/>operators · hot constructs ·<br/>cold storage · grid traffic<br/><i>footer: jack out of the grid</i>"]
+  end
+
+  subgraph CHAT ["/chat/&lcub;id&rcub;  — construct"]
+    JOIN["join view<br/><i>patch in as &lt;handle&gt;</i><br/>or under an alias —<br/>alias never touches the grid handle"]
+    CALL["in-call view<br/>VU meter · operators on channel ·<br/>cut feed · drop the line"]
+    SEALEDNOTE["flatlined notice<br/><i>no second run</i>"]
+  end
+
+  subgraph ARCH ["/archive/&lcub;id&rcub;  — cold storage"]
+    PARSED["transcript dump<br/>+ raw channels + json"]
+    PARSING["wintermute parsing…<br/><i>auto-refreshes 5s</i>"]
+    UNPARSED["unparsed / parse failed<br/><i>wake wintermute</i>"]
+    NOTFOUND["no such construct"]
+  end
+
+  ENTRY(["browser opens /"]) --> HANDLE{"stored<br/>handle?"}
+  HANDLE -- "yes — auto-enter" --> LOBBY
+  HANDLE -- "no" --> LOGIN
+  LOGIN -- "jack in (stores handle)" --> LOBBY
+  LOBBY -- "jack out of the grid<br/>(burns handle)" --> LOGIN
+
+  LOBBY -- "spin up a construct<br/>GET /api/dig → navigate" --> JOIN
+  LOBBY -- "patch in (hot construct)" --> JOIN
+  LOBBY -- "access (cold storage)" --> PARSED
+
+  JOIN -- "patch in: mic permission<br/>+ ws join ok" --> CALL
+  JOIN -- "join rejected: sealed" --> SEALEDNOTE
+  SEALEDNOTE -- "access cold storage" --> PARSED
+  CALL -- "drop the line / close tab<br/>→ leave, navigate /" --> LOBBY
+  JOIN -- "back to the grid" --> LOBBY
+
+  PARSED -.->|"back to the grid"| LOBBY
+  PARSING -- "parse finishes" --> PARSED
+  UNPARSED -- "wake wintermute<br/>POST …/transcribe" --> PARSING
+
+  classDef live stroke:#4be4e4,stroke-width:2px,fill:#d9f5f5,color:#05070a;
+  classDef warn stroke:#e0af68,fill:#f0e4c4,color:#1a1408;
+  classDef ghost stroke:#46606e,fill:#131a1f,color:#9db4c0;
+  class CALL,JOIN live;
+  class PARSING warn;
+  class NOTFOUND ghost;
+</pre>
+</div>
+
+<h2>construct lifecycle — one way, no second run</h2>
+<p class="legend">
+  Server-side truth. <code>metadata.json</code> on disk is what makes a
+  flatline permanent: the id can never be joined or reused.
+</p>
+<div class="panel">
+<pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {
+  "background": "#05070a",
+  "primaryColor": "#cfe9ec",
+  "primaryTextColor": "#05070a",
+  "primaryBorderColor": "#4be4e4",
+  "secondaryColor": "#cfe9ec",
+  "tertiaryColor": "#cfe9ec",
+  "textColor": "#9db4c0",
+  "lineColor": "#46606e",
+  "noteBkgColor": "#f0e4c4",
+  "noteTextColor": "#1a1408",
+  "noteBorderColor": "#e0af68",
+  "fontFamily": "ui-monospace, Menlo, monospace",
+  "fontSize": "13px"
+}}}%%
+stateDiagram-v2
+  [*] --> unclaimed : name minted by GET /api/dig
+  unclaimed --> hot : first patch-in<br/>(router created, taping starts per producer)
+  hot --> hot : operators patch in / drop<br/>(≥1 channel still open)
+  hot --> flatlined : last operator drops the line<br/>metadata.json written — PERMANENT
+  flatlined --> parsing : wintermute wakes<br/>(auto when tracks &gt; 0)
+  flatlined --> [*] : nothing taped<br/>(empty archive, no parse)
+  parsing --> parsed : exit 0 — transcript committed
+  parsing --> parse_failed : nonzero exit<br/>(log kept per room)
+  parse_failed --> parsing : wake wintermute<br/>POST /api/archives/&lcub;id&rcub;/transcribe
+  parsed --> [*]
+
+  note right of flatlined
+    join attempts now
+    rejected: "sealed"
+  end note
+</pre>
+</div>
+
+<h2>jack in — what happens on the wire</h2>
+<p class="legend">
+  The recording pipeline is fully independent of the call: an ffmpeg failure
+  can never drop the channel.
+</p>
+<div class="panel">
+<pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {
+  "background": "#05070a",
+  "primaryColor": "#cfe9ec",
+  "primaryTextColor": "#05070a",
+  "primaryBorderColor": "#4be4e4",
+  "textColor": "#9db4c0",
+  "lineColor": "#46606e",
+  "actorBkg": "#cfe9ec",
+  "actorBorder": "#4be4e4",
+  "actorTextColor": "#05070a",
+  "actorLineColor": "#46606e",
+  "signalColor": "#46606e",
+  "signalTextColor": "#9db4c0",
+  "noteBkgColor": "#f0e4c4",
+  "noteTextColor": "#1a1408",
+  "noteBorderColor": "#e0af68",
+  "activationBkgColor": "#14303a",
+  "fontFamily": "ui-monospace, Menlo, monospace",
+  "fontSize": "13px"
+}}}%%
+sequenceDiagram
+  participant B as browser
+  participant S as server (ws signaling)
+  participant M as mediasoup SFU
+  participant F as ffmpeg (per producer)
+
+  B->>B: getUserMedia (mic) + start VU meter
+  B->>S: join {roomId, handle}
+  S->>M: get/create router
+  S-->>B: rtpCapabilities + peers already on channel
+  B->>S: createTransport ×2 (send, recv)
+  S->>M: createWebRtcTransport ×2
+  B->>S: produce (opus rtpParameters)
+  S->>M: transport.produce
+  S->>M: PlainTransport → consume producer
+  M->>F: RTP (opus) to 127.0.0.1
+  F->>F: tape ogg pages to disk continuously
+  S-->>B: newProducer → other operators consume
+  Note over B,M: DTLS-SRTP encrypted media, opus both ways
+
+  B->>S: leave (drop the line)
+  S->>M: close transports
+  S->>F: SIGINT, await exit (file already durable)
+  S->>S: last channel? → metadata.json (flatline) → wake wintermute
+</pre>
+</div>
+
+<p class="narrative">
+  source of truth: <code>web/src/pages/*.astro</code> (views),
+  <code>server/index.ts</code> (routing &amp; seal),
+  <code>server/recorder.ts</code> (taping),
+  <code>server/transcriber.ts</code> (wintermute).
+</p>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true });
+</script>
+</body>
+</html>

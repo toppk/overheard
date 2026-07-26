@@ -150,8 +150,12 @@ def place_events(metadata: dict) -> list[dict]:
     placed = []
     for ev in metadata.get("events", []):
         placed_ms = ev["room_time_ms"]
-        if room_start_epoch_ms is not None and ev.get("client_time_ms"):
-            claimed = ev["client_time_ms"] - room_start_epoch_ms
+        # Best: the claim already translated onto the server clock (clock
+        # sync at join). Fallback: the raw client claim, usable only when
+        # client and server clocks happen to agree.
+        claim_epoch = ev.get("claim_server_ms") or ev.get("client_time_ms")
+        if room_start_epoch_ms is not None and claim_epoch:
+            claimed = claim_epoch - room_start_epoch_ms
             # Sanity-check the claim: only trust it near the receipt time
             # (clock skew or a bogus client otherwise throws it off the map).
             if abs(claimed - ev["room_time_ms"]) < 10_000:

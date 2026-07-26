@@ -238,6 +238,20 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       };
     }
 
+    case 'clockPing': {
+      return { serverTime: Date.now() };
+    }
+
+    case 'clockOffset': {
+      const { peer } = requireJoined(state);
+      const offset = Number(msg.offsetMs);
+      if (Number.isFinite(offset) && Math.abs(offset) < 24 * 3600 * 1000) {
+        peer.clockOffsetMs = offset;
+        console.log(`[room] ${peer.name} clock offset ${offset.toFixed(0)}ms (rtt ${msg.rttMs}ms)`);
+      }
+      return {};
+    }
+
     case 'muteState': {
       const { room, peer } = requireJoined(state);
       room.addEvent(peer, msg.muted ? 'mute' : 'unmute', Number(msg.clientTimeMs) || undefined);
