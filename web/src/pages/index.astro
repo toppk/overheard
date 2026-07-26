@@ -9,7 +9,7 @@ import HelpDeck from '../components/HelpDeck.astro';
     <title>overheard // the grid</title>
   </head>
   <body>
-    <h1>overheard // the grid</h1>
+    <h1>overheard // the grid<span id="whoami-wrap" style="display:none;"><span style="color:var(--dim);"> // operating as </span><span id="whoami" style="text-transform:none;"></span></span></h1>
     <p class="narrative">
       The sky above the port is the color of a dead channel. You jack in.
       Constructs hang in the grid like lit windows — some hot with voices,
@@ -47,7 +47,6 @@ import HelpDeck from '../components/HelpDeck.astro';
 
     <p class="narrative" style="margin-top:1.5rem;">
       <span id="session-info" style="display:none;">
-        operating as <span id="whoami"></span> ·
         <button class="cmd" id="logout-btn">jack out of the grid</button> ·
         <button class="cmd" id="chimes-btn">chimes: on</button> ·
         <button class="cmd" id="pings-btn">pings: off</button> ·
@@ -214,6 +213,7 @@ import HelpDeck from '../components/HelpDeck.astro';
         diag(`entering the grid as ${JSON.stringify(name)}`);
         myName = name;
         document.getElementById('whoami')!.textContent = name;
+        document.getElementById('whoami-wrap')!.style.display = 'inline';
         document.getElementById('session-info')!.style.display = 'inline';
         namePanel.style.display = 'none';
         commons.style.display = 'block';
@@ -245,6 +245,7 @@ import HelpDeck from '../components/HelpDeck.astro';
         nameInput.value = last ?? '';
         commons.style.display = 'none';
         document.getElementById('session-info')!.style.display = 'none';
+        document.getElementById('whoami-wrap')!.style.display = 'none';
         namePanel.style.display = 'block';
       });
 

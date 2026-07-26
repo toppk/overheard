@@ -50,7 +50,6 @@
   .legend .live { color: var(--cyan); }
   .legend .warn { color: var(--amber); }
   code { color: var(--cyan); background: rgba(75,228,228,0.07); padding: 0.05rem 0.3rem; border-radius: 2px; }
-  pre.mermaid { margin: 0; }
   pre.art {
     margin: 0;
     color: var(--cyan);
@@ -158,55 +157,37 @@
 
 <h2>jack in — what happens on the wire</h2>
 <p class="legend">
-  The recording pipeline is fully independent of the call: an ffmpeg failure
-  can never drop the channel.
+  The recording pipeline is fully independent of the call: a recorder
+  failure can never drop the channel.
 </p>
 <div class="panel">
-<pre class="mermaid">
-%%{init: {"theme": "base", "themeVariables": {
-  "background": "#05070a",
-  "primaryColor": "#cfe9ec",
-  "primaryTextColor": "#05070a",
-  "primaryBorderColor": "#4be4e4",
-  "textColor": "#9db4c0",
-  "lineColor": "#46606e",
-  "actorBkg": "#cfe9ec",
-  "actorBorder": "#4be4e4",
-  "actorTextColor": "#05070a",
-  "actorLineColor": "#46606e",
-  "signalColor": "#46606e",
-  "signalTextColor": "#9db4c0",
-  "noteBkgColor": "#f0e4c4",
-  "noteTextColor": "#1a1408",
-  "noteBorderColor": "#e0af68",
-  "activationBkgColor": "#14303a",
-  "fontFamily": "ui-monospace, Menlo, monospace",
-  "fontSize": "13px"
-}}}%%
-sequenceDiagram
-  participant B as browser
-  participant S as server (ws signaling)
-  participant M as mediasoup SFU
-  participant F as ffmpeg (per producer)
-
-  B->>B: getUserMedia (mic) + start VU meter
-  B->>S: join {roomId, handle}
-  S->>M: get/create router
-  S-->>B: rtpCapabilities + peers already on channel
-  B->>S: createTransport ×2 (send, recv)
-  S->>M: createWebRtcTransport ×2
-  B->>S: produce (opus rtpParameters)
-  S->>M: transport.produce
-  S->>M: PlainTransport → consume producer
-  M->>F: RTP (opus) to 127.0.0.1
-  F->>F: tape ogg pages to disk continuously
-  S-->>B: newProducer → other operators consume
-  Note over B,M: DTLS-SRTP encrypted media, opus both ways
-
-  B->>S: leave (drop the line)
-  S->>M: close transports
-  S->>F: SIGINT, await exit (file already durable)
-  S->>S: last channel? → metadata.json (flatline) → wake wintermute
+<pre class="art">
+ browser                server (ws)         mediasoup             ffmpeg
+    │                       │                   │                    │
+    │ getUserMedia (mic)    │                   │                    │
+    │ + start VU meter      │                   │                    │
+    │                       │                   │                    │
+    │───── join ───────────▶│                   │                    │
+    │                       │── get/create ────▶│                    │
+    │◀── rtpCapabilities ───│   router          │                    │
+    │    + peers on channel │                   │                    │
+    │                       │                   │                    │
+    │── createTransport ×2 ▶│── WebRtcTransport▶│                    │
+    │── produce (opus) ────▶│── produce ───────▶│                    │
+    │                       │── PlainTransport ▶│                    │
+    │                       │   consume producer│─── RTP (opus) ────▶│
+    │                       │                   │    to 127.0.0.1    │
+    │◀── newProducer ───────│                   │       tape ogg pages
+    │    (other operators   │                   │       to disk,
+    │     consume)          │                   │       continuously
+    │                       │                   │                    │
+    ├╌╌╌ DTLS-SRTP encrypted media, opus both ways ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+    │                       │                   │                    │
+    │── leave (drop the ───▶│── close ─────────▶│                    │
+    │        line)          │   transports      │                    │
+    │                       │── SIGINT, await exit (file durable) ──▶│
+    │                       │                   │                    │
+    │                       │ last channel? → flatline → wintermute  │
 </pre>
 </div>
 
@@ -216,9 +197,5 @@ sequenceDiagram
   <code>server/recorder.ts</code> (taping),
   <code>server/transcriber.ts</code> (wintermute).
 </p>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: true });
-</script>
 </body>
 </html>
