@@ -190,4 +190,22 @@ pre.transcript {
   font-size: 0.9rem;
 }
 
+/* Colorized transcript rendering (archive page). */
+.transcript-view { font-size: 0.9rem; }
+.transcript-view .tr-utterance { margin: 0.1rem 0; }
+.transcript-view .tr-speaker { font-weight: 600; margin-top: 0.7rem; }
+.transcript-view .tr-ts { color: var(--dim); font-size: 0.85em; }
+.transcript-view .tr-event {
+  color: var(--amber);
+  font-style: italic;
+  font-size: 0.85em;
+  margin: 0.5rem 0;
+}
+.transcript-view .tr-event .tr-ts { color: var(--amber); opacity: 0.7; }
+.transcript-view .tr-overlap {
+  color: var(--red);
+  font-style: italic;
+  font-size: 0.8em;
+}
+
 audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }

@@ -23,6 +23,87 @@ import '../../styles/neon.css';
       document.getElementById('room-name')!.textContent = roomId;
       const content = document.getElementById('content')!;
 
+      // Each speaker gets a stable color by order of appearance.
+      const SPEAKER_COLORS = ['#4be4e4', '#e94fa1', '#9ece6a', '#e0af68', '#7aa2f7', '#f7768e'];
+      function renderTranscript(md: string, metadata: any): HTMLElement {
+        const box = document.createElement('div');
+        box.className = 'transcript-view panel';
+        const colorFor = new Map<string, string>();
+        const speakerColor = (name: string) => {
+          if (!colorFor.has(name)) {
+            colorFor.set(name, SPEAKER_COLORS[colorFor.size % SPEAKER_COLORS.length]);
+          }
+          return colorFor.get(name)!;
+        };
+        // Seed colors in track order so they're stable across renders.
+        for (const t of metadata.tracks ?? []) speakerColor(String(t.display_name));
+
+        const names = [...colorFor.keys()].sort((a, b) => b.length - a.length);
+        for (const raw of md.split('\n')) {
+          const line = raw.trimEnd();
+          if (!line || line.startsWith('# ')) continue;
+
+          const event = line.match(/^\*\[ (.+) — (\d\d:\d\d) \]\*$/);
+          if (event) {
+            const div = document.createElement('div');
+            div.className = 'tr-event';
+            const name = names.find((n) => event[1].startsWith(`${n} `));
+            div.append('[ ');
+            if (name) {
+              const s = document.createElement('span');
+              s.style.color = speakerColor(name);
+              s.textContent = name;
+              div.append(s, event[1].slice(name.length));
+            } else {
+              div.append(event[1]);
+            }
+            const ts = document.createElement('span');
+            ts.className = 'tr-ts';
+            ts.textContent = ` — ${event[2]} ]`;
+            div.append(ts);
+            box.appendChild(div);
+            continue;
+          }
+
+          const speaker = line.match(/^\*\*(.+)\*\*$/);
+          if (speaker) {
+            const div = document.createElement('div');
+            div.className = 'tr-speaker';
+            div.style.color = speakerColor(speaker[1]);
+            div.textContent = speaker[1];
+            box.appendChild(div);
+            continue;
+          }
+
+          const utterance = line.match(/^\((\d\d:\d\d)\) (.*)$/);
+          if (utterance) {
+            const div = document.createElement('div');
+            div.className = 'tr-utterance';
+            const ts = document.createElement('span');
+            ts.className = 'tr-ts';
+            ts.textContent = `(${utterance[1]}) `;
+            div.append(ts);
+            let text = utterance[2];
+            const overlapped = text.endsWith('*[overlapping]*');
+            if (overlapped) text = text.slice(0, -'*[overlapping]*'.length).trimEnd();
+            div.append(text);
+            if (overlapped) {
+              const o = document.createElement('span');
+              o.className = 'tr-overlap';
+              o.textContent = ' [overlapping]';
+              div.append(o);
+            }
+            box.appendChild(div);
+            continue;
+          }
+
+          const div = document.createElement('div');
+          div.textContent = line;
+          box.appendChild(div);
+        }
+        return box;
+      }
+
       async function load() {
         const res = await fetch(`/api/archives/${roomId}`);
         if (!res.ok) {
@@ -46,10 +127,7 @@ import '../../styles/neon.css';
         content.appendChild(h2t);
 
         if (transcript === 'done' && conversation) {
-          const pre = document.createElement('pre');
-          pre.className = 'transcript panel';
-          pre.textContent = conversation;
-          content.appendChild(pre);
+          content.appendChild(renderTranscript(conversation, metadata));
           const links = document.createElement('p');
           links.innerHTML = `<a href="/recordings/${roomId}/transcripts/canonical.json">structured dump (json)</a>`;
           content.appendChild(links);

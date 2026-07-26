@@ -18,12 +18,18 @@ import sys
 from pathlib import Path
 
 
-def transcribe_track(model, audio_path: Path, offset_ms: int, speaker: dict) -> list[dict]:
+def transcribe_track(
+    model, audio_path: Path, offset_ms: int, speaker: dict, vocab: str | None = None
+) -> list[dict]:
+    # Participant handles (and any --vocab terms) are fed to the decoder so
+    # names come out as written instead of near-homophones ("toppk" -> "top K").
     segments, _info = model.transcribe(
         str(audio_path),
         vad_filter=True,
         word_timestamps=True,
         beam_size=5,
+        hotwords=vocab,
+        initial_prompt=f"A voice call between {vocab}." if vocab else None,
     )
     utterances = []
     for i, seg in enumerate(segments):
@@ -196,6 +202,11 @@ def main() -> int:
     parser.add_argument("room_dir", type=Path, help="recordings/<room-id> directory")
     parser.add_argument("--model", default="small", help="faster-whisper model size (default: small)")
     parser.add_argument("--language", default=None, help="force language code, e.g. en")
+    parser.add_argument(
+        "--vocab",
+        default=None,
+        help="extra comma-separated terms to bias decoding toward (names are automatic)",
+    )
     args = parser.parse_args()
 
     metadata_path = args.room_dir / "metadata.json"
@@ -217,6 +228,12 @@ def main() -> int:
     out_dir = args.room_dir / "transcripts"
     (out_dir / "tracks").mkdir(parents=True, exist_ok=True)
 
+    names = list(dict.fromkeys(str(t["display_name"]) for t in metadata.get("tracks", [])))
+    vocab_terms = names + ([w.strip() for w in args.vocab.split(",")] if args.vocab else [])
+    vocab = ", ".join(t for t in vocab_terms if t) or None
+    if vocab:
+        print(f"vocabulary bias: {vocab}")
+
     all_utterances: list[dict] = []
     for track in metadata["tracks"]:
         audio_path = args.room_dir / track["file"]
@@ -225,7 +242,9 @@ def main() -> int:
             continue
         print(f"transcribing {track['display_name']} ({audio_path.name})…")
         try:
-            utterances = transcribe_track(model, audio_path, track["room_time_start_ms"], track)
+            utterances = transcribe_track(
+                model, audio_path, track["room_time_start_ms"], track, vocab=vocab
+            )
         except Exception as err:  # noqa: BLE001 — a dead track must not sink the room
             print(
                 f"warning: could not transcribe {audio_path.name} "
