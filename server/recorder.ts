@@ -111,6 +111,10 @@ export async function recordProducer(opts: {
   // Give ffmpeg a moment to bind its UDP port before media flows.
   await new Promise((r) => setTimeout(r, 500));
   await consumer.resume();
+  // Track timing is anchored to when media can actually flow (post-resume),
+  // not when this function started — the difference (~800ms) shows up as
+  // transcript timestamps drifting early against room events.
+  const mediaStartMs = Date.now() - roomStartedAt;
 
   console.log(`[rec] recording ${displayName} (${participantId}) -> ${oggFile}`);
 
@@ -119,7 +123,7 @@ export async function recordProducer(opts: {
     participantId,
     displayName,
     file: path.relative(path.join(config.recordingsDir, roomId), oggFile),
-    roomTimeStartMs,
+    roomTimeStartMs: mediaStartMs,
     stop: async () => {
       if (stopped) return;
       stopped = true;

@@ -238,6 +238,12 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       };
     }
 
+    case 'muteState': {
+      const { room, peer } = requireJoined(state);
+      room.addEvent(peer, msg.muted ? 'mute' : 'unmute', Number(msg.clientTimeMs) || undefined);
+      return {};
+    }
+
     case 'resumeConsumer': {
       const { peer } = requireJoined(state);
       const consumer = peer.consumers.get(msg.consumerId);

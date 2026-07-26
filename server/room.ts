@@ -16,12 +16,21 @@ export interface Peer {
   recordings: TrackRecording[];
 }
 
+export interface RoomEvent {
+  room_time_ms: number; // server receipt time, room-relative
+  client_time_ms?: number; // client's claimed wallclock at the moment of action
+  participant_id: string;
+  display_name: string;
+  type: 'join' | 'leave' | 'mute' | 'unmute';
+}
+
 export class Room {
   id: string;
   router: mediasoup.types.Router;
   peers = new Map<string, Peer>();
   startedAt = Date.now();
   finishedRecordings: TrackRecording[] = [];
+  events: RoomEvent[] = [];
 
   constructor(id: string, router: mediasoup.types.Router) {
     this.id = id;
@@ -39,7 +48,18 @@ export class Room {
       recordings: [],
     };
     this.peers.set(id, peer);
+    this.addEvent(peer, 'join');
     return peer;
+  }
+
+  addEvent(peer: Peer, type: RoomEvent['type'], clientTimeMs?: number): void {
+    this.events.push({
+      room_time_ms: Date.now() - this.startedAt,
+      ...(clientTimeMs !== undefined && { client_time_ms: clientTimeMs }),
+      participant_id: peer.id,
+      display_name: peer.name,
+      type,
+    });
   }
 
   async createWebRtcTransport(peer: Peer): Promise<mediasoup.types.WebRtcTransport> {
@@ -49,6 +69,14 @@ export class Room {
       enableTcp: true,
       preferUdp: true,
     });
+    // Media-path diagnostics: these are what distinguish "client connected
+    // but sent no audio" from "media never got through at all".
+    transport.on('icestatechange', (state) =>
+      console.log(`[transport ${peer.name}/${transport.id.slice(0, 8)}] ice: ${state}`),
+    );
+    transport.on('dtlsstatechange', (state) =>
+      console.log(`[transport ${peer.name}/${transport.id.slice(0, 8)}] dtls: ${state}`),
+    );
     peer.transports.set(transport.id, transport);
     return transport;
   }
@@ -74,6 +102,7 @@ export class Room {
   async removePeer(peerId: string): Promise<void> {
     const peer = this.peers.get(peerId);
     if (!peer) return;
+    this.addEvent(peer, 'leave');
     this.peers.delete(peerId);
     for (const rec of peer.recordings) {
       await rec.stop();
@@ -110,6 +139,9 @@ export class Room {
         room_time_start_ms: rec.roomTimeStartMs,
         room_time_end_ms: rec.roomTimeEndMs ?? null,
       })),
+      // Non-speech events on the same room timeline. mute/unmute are client
+      // CLAIMS (stamped on receipt; client_time_ms is what the client says).
+      events: this.events,
     };
     fs.writeFileSync(path.join(dir, 'metadata.json'), JSON.stringify(metadata, null, 2));
     console.log(`[room ${this.id}] wrote metadata for ${metadata.tracks.length} track(s)`);

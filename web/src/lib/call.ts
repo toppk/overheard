@@ -64,7 +64,13 @@ export class Call {
   }
 
   toggleMute(): boolean {
+    // Capture the wallclock BEFORE touching the track: this is the client's
+    // claim of when the audio actually dropped/resumed, stored alongside the
+    // server receipt time so the transcript can place it on the audio
+    // timeline rather than at notification arrival.
+    const clientTimeMs = Date.now();
     if (this.micTrack) this.micTrack.enabled = !this.micTrack.enabled;
+    this.signal('muteState', { muted: this.muted, clientTimeMs }).catch(() => {});
     return this.muted;
   }
 
@@ -183,6 +189,17 @@ export class Call {
       this.signal('connectTransport', { transportId: transport.id, dtlsParameters })
         .then(() => callback())
         .catch(errback);
+    });
+
+    // The VU meter only proves the mic works locally; this proves (or
+    // disproves) that media is actually flowing to the server.
+    transport.on('connectionstatechange', (state) => {
+      diag(`${direction} transport connection: ${state}`);
+      if (direction === 'send') {
+        if (state === 'connected') this.events.onStatus('on channel — carrier confirmed');
+        else if (state === 'failed' || state === 'disconnected')
+          this.events.onStatus(`NO CARRIER — audio not reaching the grid (${state})`);
+      }
     });
 
     if (direction === 'send') {
