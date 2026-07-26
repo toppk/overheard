@@ -89,8 +89,14 @@ def split_utterances_at_events(utterances: list[dict], events: list[dict]) -> li
     return result
 
 
+# ASR pads segment boundaries with silence, so consecutive turns graze each
+# other by a few hundred ms without any real simultaneous speech. Only
+# intersections at least this long count as overlap.
+MIN_OVERLAP_MS = 500
+
+
 def mark_overlaps(utterances: list[dict]) -> None:
-    """Flag utterances that overlap in time with another speaker's speech."""
+    """Flag utterances that genuinely overlap another speaker's speech."""
     for u in utterances:
         u["overlapped"] = False
         u["overlaps_with"] = []
@@ -98,10 +104,14 @@ def mark_overlaps(utterances: list[dict]) -> None:
         for b in utterances[i + 1 :]:
             if b["start_ms"] >= a["end_ms"]:
                 break
-            if a["speaker_id"] != b["speaker_id"]:
-                a["overlapped"] = b["overlapped"] = True
-                a["overlaps_with"].append(b["utterance_id"])
-                b["overlaps_with"].append(a["utterance_id"])
+            if a["speaker_id"] == b["speaker_id"]:
+                continue
+            intersection = min(a["end_ms"], b["end_ms"]) - max(a["start_ms"], b["start_ms"])
+            if intersection < MIN_OVERLAP_MS:
+                continue
+            a["overlapped"] = b["overlapped"] = True
+            a["overlaps_with"].append(b["utterance_id"])
+            b["overlaps_with"].append(a["utterance_id"])
 
 
 def fmt_ts(ms: int) -> str:
