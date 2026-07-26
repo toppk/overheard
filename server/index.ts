@@ -209,6 +209,7 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       );
       return {
         peerId: peer.id,
+        audio: config.audio,
         routerRtpCapabilities: room.router.rtpCapabilities,
         peers: [...room.peers.values()]
           .filter((p) => p.id !== peer.id)

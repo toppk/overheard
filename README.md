@@ -90,6 +90,7 @@ Environment variables:
 | `RTC_MIN_PORT` / `RTC_MAX_PORT` | `40000` / `40100` | WebRTC media port range |
 | `RECORDINGS_DIR` | `recordings` | where audio/transcripts land |
 | `DB_PATH` | `data/overheard.db` | cold-storage index (Turso embedded, FTS over transcripts; rebuildable from `RECORDINGS_DIR`) |
+| `OPUS_BITRATE` | `96000` | opus max average bitrate clients encode (and thus record) at; browser default is ~32k |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
 | `TRANSCRIBE_DISABLED` | unset | set to disable auto-transcription |
 

@@ -23,6 +23,17 @@ export const config = {
   rtcMinPort: Number(process.env.RTC_MIN_PORT ?? 40000),
   rtcMaxPort: Number(process.env.RTC_MAX_PORT ?? 40100),
   recordingsDir: process.env.RECORDINGS_DIR ?? 'recordings',
+  // Deployment-level audio policy, shipped to clients in the join response
+  // (the encoder lives in the browser, but the tradeoff is the server's).
+  // Recording is codec-copy, so this is also exactly what the tape gets.
+  audio: {
+    // 6k..510k valid for opus; ~32k is the browser default, 96k is
+    // transparent-for-speech.
+    opusMaxAverageBitrate: Math.min(
+      510000,
+      Math.max(6000, Number(process.env.OPUS_BITRATE ?? 96000)),
+    ),
+  },
   // Local UDP ports ffmpeg listens on to receive RTP from mediasoup.
   recordRtpPortStart: 45000,
   mediaCodecs: [

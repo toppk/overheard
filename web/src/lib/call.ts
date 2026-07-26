@@ -60,7 +60,20 @@ export class Call {
     this.recvTransport = await this.createTransport('recv');
 
     this.events.onStatus('publishing microphone…');
-    await this.sendTransport.produce({ track: this.micTrack });
+    const opusMaxAverageBitrate = joinInfo.audio?.opusMaxAverageBitrate ?? 96000;
+    diag(`producing mic (opus maxAverageBitrate=${opusMaxAverageBitrate}, fec=on, dtx=off)`);
+    await this.sendTransport.produce({
+      track: this.micTrack,
+      codecOptions: {
+        // Bitrate is deployment policy (OPUS_BITRATE env on the server).
+        opusMaxAverageBitrate,
+        // Inband FEC conceals packet loss; effectively free.
+        opusFec: true,
+        // DTX stays OFF as an invariant: continuous packets during silence
+        // are what keep the recording timeline and mute detection honest.
+        opusDtx: false,
+      },
+    });
 
     for (const peer of joinInfo.peers) {
       this.peers.set(peer.peerId, { name: peer.name });
