@@ -1,0 +1,179 @@
+---
+// Orientation deck: 3-page help popup. Include once per page, inline where
+// the trigger should sit. The trigger glows until first opened.
+---
+<button class="cmd help-trigger" id="help-trigger">orientation</button>
+
+<div class="help-overlay" id="help-overlay" hidden>
+  <div class="help-deck" role="dialog" aria-label="orientation">
+    <div class="help-page" data-page="1">
+      <h2>01 // the loop</h2>
+      <pre class="help-art">
+      ┌──────────────┐
+ ────▶│   the grid   │  jack in with
+      │   (lobby)    │  your handle
+      └──────┬───────┘
+             │ spin up, or patch
+             │ into a hot construct
+             ▼
+      ┌──────────────┐
+      │  construct   │  talk. every
+      │ (voice room) │  channel taped
+      └──────┬───────┘
+             │ last operator
+             │ drops the line
+             ▼
+      ┌──────────────┐
+      │ cold storage │  transcript + tapes,
+      │  (archive)   │  readable by everyone
+      └──────────────┘
+      </pre>
+      <p class="help-note">
+        rooms run once. when the last voice leaves, the construct flatlines —
+        forever — and wintermute, the transcription daemon, writes down
+        everything that was said.
+      </p>
+    </div>
+
+    <div class="help-page" data-page="2" hidden>
+      <h2>02 // the grid</h2>
+      <ul class="help-list">
+        <li><b>operators online</b> — everyone with the grid open right now. you appear the moment you jack in.</li>
+        <li><b>hot constructs</b> — rooms with live voices. <i>patch in</i> to join any of them.</li>
+        <li><b>cold storage</b> — every finished conversation: transcript, structured data, raw audio. open to all. nothing is private, everything is remembered.</li>
+        <li><b>grid traffic</b> — a running feed of everything happening.</li>
+        <li><b>spin up a construct</b> — mint a fresh room with a generated name and step inside.</li>
+        <li><b>jack out of the grid</b> (footer) — burn your handle and leave.</li>
+      </ul>
+    </div>
+
+    <div class="help-page" data-page="3" hidden>
+      <h2>03 // inside a construct</h2>
+      <ul class="help-list">
+        <li><b>patch in</b> — join under your handle, or <i>use an alias</i>: the room and its tapes only ever know the alias. nothing links it to your grid handle.</li>
+        <li><b>your signal</b> — the meter next to your name. if it moves when you speak, you're being heard.</li>
+        <li><b>cut your feed</b> — mute. the tape notes when you cut and reopen it, and the transcript will show it as a stage direction.</li>
+        <li><b>drop the line</b> — leave the room and land back on the grid.</li>
+        <li><b>no second run</b> — a flatlined construct can never be reopened. what was said is in cold storage, exactly as it went to tape.</li>
+      </ul>
+    </div>
+
+    <div class="help-nav">
+      <button class="cmd" id="help-prev">prev</button>
+      <span class="help-count" id="help-count">1 / 3</span>
+      <button class="cmd" id="help-next">next</button>
+      <button class="cmd" id="help-close">close</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .help-trigger { font: inherit; }
+  .help-trigger.glow {
+    color: var(--cyan);
+    animation: help-pulse 2s ease-in-out infinite;
+  }
+  @keyframes help-pulse {
+    0%, 100% { text-shadow: 0 0 4px rgba(75, 228, 228, 0.3); }
+    50% { text-shadow: 0 0 16px rgba(75, 228, 228, 0.95); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .help-trigger.glow { animation: none; text-shadow: 0 0 10px rgba(75, 228, 228, 0.6); }
+  }
+  .help-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 7, 10, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 1rem;
+  }
+  .help-overlay[hidden] { display: none; }
+  .help-deck {
+    background: var(--panel);
+    border: 1px solid var(--cyan);
+    border-radius: 2px;
+    box-shadow: 0 0 40px rgba(75, 228, 228, 0.15), inset 0 0 24px rgba(20, 48, 58, 0.25);
+    max-width: 34rem;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 1.2rem 1.4rem;
+  }
+  .help-deck h2 { margin-top: 0.2rem; }
+  .help-art {
+    color: var(--cyan);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    overflow-x: auto;
+    margin: 0.6rem 0;
+  }
+  .help-note { color: var(--dim); font-style: italic; font-size: 0.9rem; }
+  .help-list { margin: 0.6rem 0; }
+  .help-list li { padding: 0.3rem 0; }
+  .help-list b { color: var(--cyan); font-weight: 600; }
+  .help-nav {
+    display: flex;
+    gap: 1.2rem;
+    align-items: center;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.8rem;
+  }
+  .help-count { color: var(--dim); font-size: 0.85rem; }
+  .help-nav #help-close { margin-left: auto; }
+</style>
+
+<script>
+  import { diag } from '../lib/diag';
+
+  const overlay = document.getElementById('help-overlay')!;
+  const pages = [...overlay.querySelectorAll<HTMLElement>('.help-page')];
+  const count = document.getElementById('help-count')!;
+  const prevBtn = document.getElementById('help-prev') as HTMLButtonElement;
+  const nextBtn = document.getElementById('help-next') as HTMLButtonElement;
+  let page = 0;
+
+  function show(p: number) {
+    page = Math.max(0, Math.min(pages.length - 1, p));
+    pages.forEach((el, i) => (el.hidden = i !== page));
+    count.textContent = `${page + 1} / ${pages.length}`;
+    prevBtn.style.visibility = page === 0 ? 'hidden' : 'visible';
+    nextBtn.style.visibility = page === pages.length - 1 ? 'hidden' : 'visible';
+  }
+
+  const trigger = document.getElementById('help-trigger')!;
+
+  function open() {
+    diag('orientation deck opened');
+    overlay.hidden = false;
+    show(0);
+    // Found it once — stop glowing forever.
+    localStorage.setItem('overheard-oriented', '1');
+    trigger.classList.remove('glow');
+  }
+  function close() {
+    diag('orientation deck closed');
+    overlay.hidden = true;
+  }
+
+  trigger.addEventListener('click', open);
+  document.getElementById('help-close')!.addEventListener('click', close);
+  prevBtn.addEventListener('click', () => show(page - 1));
+  nextBtn.addEventListener('click', () => show(page + 1));
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (overlay.hidden) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowRight') show(page + 1);
+    if (e.key === 'ArrowLeft') show(page - 1);
+  });
+
+  if (!localStorage.getItem('overheard-oriented')) {
+    trigger.classList.add('glow');
+  }
+</script>

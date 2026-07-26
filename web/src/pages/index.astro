@@ -1,5 +1,6 @@
 ---
 import '../styles/neon.css';
+import HelpDeck from '../components/HelpDeck.astro';
 ---
 <html lang="en">
   <head>
@@ -41,12 +42,15 @@ import '../styles/neon.css';
 
       <h2>grid traffic</h2>
       <div class="log panel" id="events"></div>
-
-      <p class="narrative" style="margin-top:1.5rem;">
-        operating as <span id="whoami"></span> ·
-        <button class="cmd" id="logout-btn">jack out of the grid</button>
-      </p>
     </div>
+
+    <p class="narrative" style="margin-top:1.5rem;">
+      <span id="session-info" style="display:none;">
+        operating as <span id="whoami"></span> ·
+        <button class="cmd" id="logout-btn">jack out of the grid</button> ·
+      </span>
+      <HelpDeck />
+    </p>
 
     <script>
       import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
@@ -66,11 +70,24 @@ import '../styles/neon.css';
       }
 
       function render(state: any) {
+        // Operators don't vanish just because they're in a construct: merge
+        // lobby presence with live-room occupants, annotated with the room.
+        const inConstruct = new Map<string, string>();
+        for (const room of state.rooms) {
+          for (const p of room.participants) inConstruct.set(p, room.roomId);
+        }
         const users = document.getElementById('users')!;
         users.innerHTML = '';
-        for (const name of state.users) {
+        for (const name of new Set<string>([...state.users, ...inConstruct.keys()])) {
           const li = document.createElement('li');
           li.textContent = name;
+          const room = inConstruct.get(name);
+          if (room) {
+            const tag = document.createElement('span');
+            tag.className = 'narrative';
+            tag.textContent = ` (in ${room})`;
+            li.appendChild(tag);
+          }
           users.appendChild(li);
         }
 
@@ -156,6 +173,7 @@ import '../styles/neon.css';
       function enterGrid(name: string) {
         diag(`entering the grid as ${JSON.stringify(name)}`);
         document.getElementById('whoami')!.textContent = name;
+        document.getElementById('session-info')!.style.display = 'inline';
         namePanel.style.display = 'none';
         commons.style.display = 'block';
         reconnect = true;
@@ -176,11 +194,16 @@ import '../styles/neon.css';
       // handle and fall back to the login panel.
       document.getElementById('logout-btn')!.addEventListener('click', () => {
         diag('click: jack out of the grid');
+        // Burning the handle kills auto-entry, but the login input still
+        // remembers the last name used — convenience, not identity.
+        const last = getHandle();
+        if (last) localStorage.setItem('overheard-last-handle', last);
         clearHandle();
         reconnect = false;
         ws?.close();
-        nameInput.value = '';
+        nameInput.value = last ?? '';
         commons.style.display = 'none';
+        document.getElementById('session-info')!.style.display = 'none';
         namePanel.style.display = 'block';
       });
 
@@ -190,7 +213,13 @@ import '../styles/neon.css';
       if (storedName) {
         enterGrid(storedName);
       } else {
-        diag('no stored handle: showing login panel');
+        const last = localStorage.getItem('overheard-last-handle');
+        if (last) {
+          nameInput.value = last;
+          diag(`no stored handle: showing login panel (prefilled with last handle ${JSON.stringify(last)})`);
+        } else {
+          diag('no stored handle: showing login panel');
+        }
       }
 
       document.getElementById('dig-btn')!.addEventListener('click', async () => {
