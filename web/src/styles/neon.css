@@ -12,6 +12,24 @@
 
 * { box-sizing: border-box; }
 
+/* Neon scrollbars: thin rail, dim thumb that lights up under the cursor. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 1px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--dim);
+  box-shadow: 0 0 8px rgba(75, 228, 228, 0.4);
+}
+*::-webkit-scrollbar-thumb:active { background: var(--cyan); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 body {
   background: var(--bg);
   color: var(--text);
