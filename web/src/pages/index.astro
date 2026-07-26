@@ -49,12 +49,15 @@ import HelpDeck from '../components/HelpDeck.astro';
       <span id="session-info" style="display:none;">
         operating as <span id="whoami"></span> ·
         <button class="cmd" id="logout-btn">jack out of the grid</button> ·
+        <button class="cmd" id="chimes-btn">chimes: on</button> ·
+        <button class="cmd" id="pings-btn">pings: off</button> ·
       </span>
       <HelpDeck />
     </p>
 
     <script>
       import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
+      import { chime, primeChimes, type ChimeKind } from '../lib/chimes';
 
       diag('page load: / (the grid)', { referrer: document.referrer || '(none)' });
       const namePanel = document.getElementById('name-panel')!;
@@ -140,6 +143,40 @@ import HelpDeck from '../components/HelpDeck.astro';
           div.textContent = ev.text;
           events.appendChild(div);
         }
+        signalNewEvents(state.events);
+      }
+
+      // --- chimes & pings -------------------------------------------------
+      let chimesOn = (localStorage.getItem('overheard-chimes') ?? '1') === '1';
+      let pingsOn = localStorage.getItem('overheard-pings') === '1';
+      let lastEventTs = -1; // -1: first state; baseline silently
+      let myName = '';
+
+      function classify(text: string): ChimeKind | null {
+        if (text.includes('jacks into the grid')) return 'arrival';
+        if (text.includes('spins up a construct')) return 'construct';
+        if (text.includes('patches into')) return 'patch';
+        return null;
+      }
+
+      function signalNewEvents(events: { ts: number; text: string }[]) {
+        const maxTs = events.reduce((m, e) => Math.max(m, e.ts), 0);
+        if (lastEventTs === -1) {
+          lastEventTs = maxTs;
+          return;
+        }
+        for (const ev of events) {
+          if (ev.ts <= lastEventTs) continue;
+          if (myName && ev.text.startsWith(`${myName} `)) continue; // your own noise
+          const kind = classify(ev.text);
+          if (!kind) continue;
+          diag(`grid signal: ${kind} — ${ev.text}`);
+          if (chimesOn) chime(kind);
+          if (pingsOn && document.hidden && Notification.permission === 'granted') {
+            new Notification('overheard // the grid', { body: ev.text, tag: 'overheard-grid' });
+          }
+        }
+        lastEventTs = maxTs;
       }
 
       let ws: WebSocket | null = null;
@@ -175,6 +212,7 @@ import HelpDeck from '../components/HelpDeck.astro';
 
       function enterGrid(name: string) {
         diag(`entering the grid as ${JSON.stringify(name)}`);
+        myName = name;
         document.getElementById('whoami')!.textContent = name;
         document.getElementById('session-info')!.style.display = 'inline';
         namePanel.style.display = 'none';
@@ -209,6 +247,39 @@ import HelpDeck from '../components/HelpDeck.astro';
         document.getElementById('session-info')!.style.display = 'none';
         namePanel.style.display = 'block';
       });
+
+      // Chime/ping toggles. Clicking is also the user gesture that lets the
+      // AudioContext start (needed when the lobby was entered without one).
+      const chimesBtn = document.getElementById('chimes-btn') as HTMLButtonElement;
+      const pingsBtn = document.getElementById('pings-btn') as HTMLButtonElement;
+      const syncToggleLabels = () => {
+        chimesBtn.textContent = `chimes: ${chimesOn ? 'on' : 'off'}`;
+        pingsBtn.textContent = `pings: ${pingsOn ? 'on' : 'off'}`;
+      };
+      syncToggleLabels();
+      chimesBtn.addEventListener('click', () => {
+        chimesOn = !chimesOn;
+        localStorage.setItem('overheard-chimes', chimesOn ? '1' : '0');
+        diag(`chimes ${chimesOn ? 'enabled' : 'disabled'}`);
+        if (chimesOn) {
+          primeChimes();
+          chime('arrival'); // audible confirmation
+        }
+        syncToggleLabels();
+      });
+      pingsBtn.addEventListener('click', async () => {
+        if (!pingsOn && Notification.permission !== 'granted') {
+          const perm = await Notification.requestPermission();
+          diag(`notification permission: ${perm}`);
+          if (perm !== 'granted') return;
+        }
+        pingsOn = !pingsOn;
+        localStorage.setItem('overheard-pings', pingsOn ? '1' : '0');
+        diag(`pings ${pingsOn ? 'enabled' : 'disabled'}`);
+        syncToggleLabels();
+      });
+      // Any first interaction unlocks audio for auto-entered sessions.
+      document.addEventListener('click', () => primeChimes(), { once: true });
 
       // With a stored handle, skip the login panel: arriving at / (including
       // returning from a construct) drops you straight into the lobby.
