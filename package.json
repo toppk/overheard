@@ -1,6 +1,6 @@
 {
   "name": "overheard",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "license": "ISC",
   "description": "Self-hosted voice rooms with per-speaker recording and offline transcription",
