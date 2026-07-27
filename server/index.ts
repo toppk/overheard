@@ -163,7 +163,17 @@ const storageHandler = async (req: express.Request, res: express.Response) => {
   const handles = typeof req.query.handles === 'string' && req.query.handles
     ? req.query.handles.split(',').filter(Boolean)
     : undefined;
-  const num = (v: unknown) => (typeof v === 'string' && v !== '' ? Number(v) : undefined);
+  // A present-but-unparseable numeric param is a 400, never a silent
+  // no-filter: "returns everything with a 200" is the failure shape that
+  // hides from the caller.
+  let badParam: string | null = null;
+  const num = (name: string): number | undefined => {
+    const v = req.query[name];
+    if (typeof v !== 'string' || v === '') return undefined;
+    const n = Number(v);
+    if (!Number.isFinite(n)) badParam = name;
+    return n;
+  };
   // `since` is absolute: epoch ms or anything Date.parse understands.
   let sinceEpochMs: number | undefined;
   if (typeof req.query.since === 'string' && req.query.since !== '') {
@@ -173,18 +183,21 @@ const storageHandler = async (req: express.Request, res: express.Response) => {
       return res.status(400).json({ error: 'since must be epoch ms or an ISO 8601 date' });
     }
   }
+  const query = {
+    q,
+    handles,
+    sinceMs: num('sinceMs'),
+    sinceEpochMs,
+    minDurMs: num('minDurMs'),
+    maxDurMs: num('maxDurMs'),
+    offset: num('offset'),
+    limit: num('limit'),
+  };
+  if (badParam) {
+    return res.status(400).json({ error: `${badParam} must be a number` });
+  }
   try {
-    const result = await queryArchives({
-      q,
-      handles,
-      sinceMs: num(req.query.sinceMs),
-      sinceEpochMs,
-      minDurMs: num(req.query.minDurMs),
-      maxDurMs: num(req.query.maxDurMs),
-      offset: num(req.query.offset),
-      limit: num(req.query.limit),
-    });
-    res.json(result);
+    res.json(await queryArchives(query));
   } catch (err) {
     console.error('[api/storage] query failed:', err);
     res.status(500).json({ error: 'query failed' });
