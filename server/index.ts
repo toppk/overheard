@@ -245,7 +245,12 @@ function startScribe(roomId: string): boolean {
         : `wintermute chokes on ${roomId}. (transcription failed)`,
     );
   });
-  if (started) lobby.announce(`wintermute wakes to parse ${roomId}.`);
+  if (started) {
+    // Re-index immediately so the lobby/stacks show "parsing" while the
+    // scribe works, not a stale "unparsed" snapshot from seal time.
+    void upsertArchive(roomId).then(() => lobby.broadcastState());
+    lobby.announce(`wintermute wakes to parse ${roomId}.`);
+  }
   return started;
 }
 
