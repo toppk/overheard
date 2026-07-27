@@ -29,8 +29,9 @@ reverse proxy that adds authentication.
 In transit, between machines:
 
 - Web page, API, and signaling WebSocket: TLS (HTTPS/WSS) when certificates
-  are present in `certs/`. Without certs the server falls back to plain
-  HTTP, intended for localhost development only.
+  are present in the certs directory (`CERTS_DIR`; `/data/certs` in the
+  container image). Without certs the server falls back to plain HTTP,
+  intended for localhost development only.
 - Audio: WebRTC-mandated DTLS-SRTP in both directions. There is no
   unencrypted media mode.
 - Cleartext on the wire is limited to ICE/STUN connectivity probes and DTLS
