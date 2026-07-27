@@ -85,16 +85,17 @@
 
 <style>
   .help-trigger { font: inherit; }
+  /* Amber pulse until the operator has been through the whole deck. */
   .help-trigger.glow {
-    color: var(--cyan);
+    color: var(--amber);
     animation: help-pulse 2s ease-in-out infinite;
   }
   @keyframes help-pulse {
-    0%, 100% { text-shadow: 0 0 4px rgba(75, 228, 228, 0.3); }
-    50% { text-shadow: 0 0 16px rgba(75, 228, 228, 0.95); }
+    0%, 100% { text-shadow: 0 0 4px rgba(224, 175, 104, 0.35); }
+    50% { text-shadow: 0 0 16px rgba(224, 175, 104, 0.95); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .help-trigger.glow { animation: none; text-shadow: 0 0 10px rgba(75, 228, 228, 0.6); }
+    .help-trigger.glow { animation: none; text-shadow: 0 0 10px rgba(224, 175, 104, 0.6); }
   }
   .help-overlay {
     position: fixed;
@@ -160,23 +161,27 @@
   const nextBtn = document.getElementById('help-next') as HTMLButtonElement;
   let page = 0;
 
+  const trigger = document.getElementById('help-trigger')!;
+
   function show(p: number) {
     page = Math.max(0, Math.min(pages.length - 1, p));
     pages.forEach((el, i) => el.classList.toggle('active', i === page));
     count.textContent = `${page + 1} / ${pages.length}`;
     prevBtn.style.visibility = page === 0 ? 'hidden' : 'visible';
     nextBtn.style.visibility = page === pages.length - 1 ? 'hidden' : 'visible';
+    // Orientation counts as complete only once the whole deck has been
+    // seen — reaching the last page is what stops the glow, not opening.
+    if (page === pages.length - 1 && !localStorage.getItem('overheard-oriented')) {
+      diag('orientation completed (reached last page)');
+      localStorage.setItem('overheard-oriented', '1');
+      trigger.classList.remove('glow');
+    }
   }
-
-  const trigger = document.getElementById('help-trigger')!;
 
   function open() {
     diag('orientation deck opened');
     overlay.hidden = false;
     show(0);
-    // Found it once — stop glowing forever.
-    localStorage.setItem('overheard-oriented', '1');
-    trigger.classList.remove('glow');
   }
   function close() {
     diag('orientation deck closed');
