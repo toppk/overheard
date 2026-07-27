@@ -1,5 +1,10 @@
 # overheard
 
+[![ci](https://github.com/toppk/overheard/actions/workflows/ci.yml/badge.svg)](https://github.com/toppk/overheard/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/toppk/overheard)](https://github.com/toppk/overheard/releases)
+[![container](https://img.shields.io/badge/ghcr.io-toppk%2Foverheard-2496ed?logo=docker&logoColor=white)](https://github.com/toppk/overheard/pkgs/container/overheard)
+[![site](https://img.shields.io/badge/site-the%20grid-4be4e4)](https://toppk.github.io/overheard/)
+
 Self-hosted, browser-based voice rooms that record every participant as a
 separate audio track and produce an overlap-aware post-meeting transcript.
 See `voice_meeting_transcription_system_plan.md` for the full design.
