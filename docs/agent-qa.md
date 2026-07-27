@@ -60,6 +60,25 @@ app hydrates over), with real .md/.json links. (commit 29bcf54)
 - Nit: `Accept: application/json` returned HTML; JSON added to the offer
   list (same payload as `/api/archives/{id}`).
 
+## Round 4 — the sinceMs semantics trap
+
+The agent proved `sinceMs=<future timestamp>` returned all rows and called
+it "ignored." Root cause was subtler: `sinceMs` was a RELATIVE window
+("sealed within the last N ms" — what the lobby's 24h view uses), while
+the name and docs read as an absolute timestamp; a huge value meant "a
+window covering all history," indistinguishable from a no-op. The
+experience was a bug even though the filter worked as coded.
+
+Actions: absolute `since` param added (epoch ms or ISO 8601, 400 on
+garbage), `sinceMs` kept and documented as the relative window, llms.txt
+made unambiguous, verified with the agent's own decisive case (future
+timestamp → 0 rows).
+
+Also from this round: facets exposed the identity problem concretely —
+ken/toppk/Bob/bob as separate self-claimed handles with case splits;
+`handles=` filtering is only as good as what people typed. Evidence for
+the identity/ACL work.
+
 ## Standing lessons
 
 - Hand the artifact to its intended consumer early; the agent found in

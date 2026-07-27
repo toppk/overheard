@@ -130,9 +130,15 @@ instance. Terminology: rooms are "constructs"; a finished room is
 - GET /api/archives                  — list archives (newest first);
                                        params: q (full-text search over
                                        transcripts), handles (comma-sep,
-                                       must all be present), sinceMs,
+                                       must all be present),
+                                       since (ABSOLUTE: epoch ms or ISO
+                                       8601 — sealed at/after that
+                                       instant; use this to poll for new
+                                       meetings), sinceMs (RELATIVE:
+                                       sealed within the last N ms),
                                        minDurMs, maxDurMs, offset, limit.
-                                       Returns { total, rows }.
+                                       Returns { total, rows }; total is
+                                       matched count, rows is the page.
 - GET /api/storage/facets            — participant handles with room counts
 
 ## Raw audio
@@ -158,11 +164,21 @@ const storageHandler = async (req: express.Request, res: express.Response) => {
     ? req.query.handles.split(',').filter(Boolean)
     : undefined;
   const num = (v: unknown) => (typeof v === 'string' && v !== '' ? Number(v) : undefined);
+  // `since` is absolute: epoch ms or anything Date.parse understands.
+  let sinceEpochMs: number | undefined;
+  if (typeof req.query.since === 'string' && req.query.since !== '') {
+    const asNum = Number(req.query.since);
+    sinceEpochMs = Number.isFinite(asNum) ? asNum : Date.parse(req.query.since);
+    if (!Number.isFinite(sinceEpochMs)) {
+      return res.status(400).json({ error: 'since must be epoch ms or an ISO 8601 date' });
+    }
+  }
   try {
     const result = await queryArchives({
       q,
       handles,
       sinceMs: num(req.query.sinceMs),
+      sinceEpochMs,
       minDurMs: num(req.query.minDurMs),
       maxDurMs: num(req.query.maxDurMs),
       offset: num(req.query.offset),

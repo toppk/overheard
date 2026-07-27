@@ -157,7 +157,8 @@ async function refreshRecentCache(): Promise<void> {
 export interface StorageQuery {
   q?: string;
   handles?: string[];
-  sinceMs?: number; // only archives sealed within the last N ms
+  sinceMs?: number; // RELATIVE window: sealed within the last N ms
+  sinceEpochMs?: number; // ABSOLUTE: sealed at/after this instant
   minDurMs?: number;
   maxDurMs?: number;
   offset?: number;
@@ -174,6 +175,10 @@ export async function queryArchives(
   if (query.sinceMs) {
     where.push('ended_at >= ?');
     params.push(new Date(Date.now() - query.sinceMs).toISOString());
+  }
+  if (query.sinceEpochMs !== undefined) {
+    where.push('ended_at >= ?');
+    params.push(new Date(query.sinceEpochMs).toISOString());
   }
   if (query.minDurMs !== undefined) {
     where.push('duration_ms >= ?');
