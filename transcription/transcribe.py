@@ -51,6 +51,61 @@ def transcribe_track(
     return utterances
 
 
+def clamp_to_mute_silence(utterances: list[dict], events: list[dict]) -> None:
+    """Snap word timings out of their speaker's own mute windows.
+
+    This is a workaround for a whisper (faster-whisper) limitation, not a
+    property of the pipeline: whisper stretches word boundaries into
+    silence gaps — the first word after a gap can be stamped the better
+    part of a second early, which then sorts speech ahead of the unmute
+    stage direction. The recorded events are the trustworthy side (client
+    claim, sanity-checked against server receipt; verified to ~1 ms
+    against tape silence), so no word may extend into its speaker's mute
+    window. If the ASR engine is ever swapped for one with accurate word
+    timestamps, this clamp may be unnecessary — or undesirable, since it
+    would mask real timing disagreements worth investigating. Raw ASR
+    timings survive unclamped in transcripts/tracks/.
+    """
+    windows: dict[str, list[tuple[float, float]]] = {}
+    open_mute: dict[str, float] = {}
+    for e in events:  # already sorted by placed_ms
+        pid = e["participant_id"]
+        if e["type"] == "mute":
+            open_mute.setdefault(pid, e["placed_ms"])
+        elif e["type"] == "unmute" and pid in open_mute:
+            windows.setdefault(pid, []).append((open_mute.pop(pid), e["placed_ms"]))
+    for pid, m in open_mute.items():  # muted through to the end of the room
+        windows.setdefault(pid, []).append((m, float("inf")))
+
+    def clamp(start: int, end: int, spans: list[tuple[float, float]]) -> tuple[int, int]:
+        for m, u in spans:
+            if end <= m or start >= u:
+                continue
+            if start >= m and end <= u:
+                # Entirely inside the silence — a hallucination; collapse
+                # it onto the nearer window edge.
+                start = end = int(m if (start - m) <= (u - end) else u)
+            elif start >= m:  # head lies in the window: begin at the unmute
+                start = int(min(u, end))
+            elif end <= u:  # tail lies in the window: stop at the mute
+                end = int(max(m, start))
+            # A span covering the whole window can't be fixed by clamping
+            # (the speech on either side is real); leave it alone.
+        return start, end
+
+    for u in utterances:
+        spans = windows.get(u["speaker_id"])
+        if not spans:
+            continue
+        for w in u.get("words") or []:
+            w["start_ms"], w["end_ms"] = clamp(w["start_ms"], w["end_ms"], spans)
+        if u.get("words"):
+            u["start_ms"] = u["words"][0]["start_ms"]
+            u["end_ms"] = u["words"][-1]["end_ms"]
+        else:
+            u["start_ms"], u["end_ms"] = clamp(u["start_ms"], u["end_ms"], spans)
+
+
 def split_utterances_at_events(utterances: list[dict], events: list[dict]) -> list[dict]:
     """Split utterances that span their own speaker's mute/unmute boundary.
 
@@ -273,6 +328,7 @@ def main() -> int:
         all_utterances.extend(utterances)
 
     events = place_events(metadata)
+    clamp_to_mute_silence(all_utterances, events)
     all_utterances = split_utterances_at_events(all_utterances, events)
     all_utterances.sort(key=lambda u: u["start_ms"])
     mark_overlaps(all_utterances)
