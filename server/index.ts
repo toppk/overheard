@@ -90,10 +90,20 @@ function archiveHtml(roomId: string): string {
 
 app.get('/archive/:room', (req, res) => {
   const roomId = req.params.room.replace(/[^a-zA-Z0-9_-]/g, '');
-  const best = req.accepts(['text/markdown', 'text/html']);
+  const best = req.accepts(['text/markdown', 'text/html', 'application/json']);
   if (best === 'text/markdown') {
     const p = conversationPath(roomId);
     if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
+  }
+  if (best === 'application/json') {
+    const meta = readMetadata(roomId);
+    if (!meta) return res.status(404).json({ error: 'no such archive' });
+    const p = conversationPath(roomId);
+    return res.json({
+      metadata: meta,
+      transcript: transcriptionStatus(roomId),
+      conversation: fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null,
+    });
   }
   res.type('text/html').send(archiveHtml(roomId));
 });

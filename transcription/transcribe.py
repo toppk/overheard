@@ -171,7 +171,9 @@ def place_events(metadata: dict) -> list[dict]:
     return placed
 
 
-def render_markdown(room_id: str, utterances: list[dict], events: list[dict]) -> str:
+def render_markdown(
+    room_id: str, utterances: list[dict], events: list[dict], tracks: list[dict] | None = None
+) -> str:
     lines = [f"# Conversation transcript — room {room_id}", ""]
     items = [("u", u["start_ms"], u) for u in utterances] + [
         ("e", e["placed_ms"], e) for e in events
@@ -194,6 +196,19 @@ def render_markdown(room_id: str, utterances: list[dict], events: list[dict]) ->
         lines.append(f"({fmt_ts(u['start_ms'])}) {u['text']}{mark}")
         lines.append("")
         prev_speaker = u["speaker_name"]
+
+    # Source audio: absolute-path links so the markdown is self-contained
+    # when served from the instance (agents can fetch the raw channels).
+    if tracks:
+        lines += ["---", "", "## raw channels", ""]
+        for t in tracks:
+            lines.append(
+                f"- {t['display_name']} — "
+                f"[{t['file']}](/recordings/{room_id}/{t['file']}) "
+                f"(on channel {fmt_ts(t['room_time_start_ms'])}"
+                f"–{fmt_ts(t['room_time_end_ms']) if t.get('room_time_end_ms') else '?'})"
+            )
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -271,7 +286,7 @@ def main() -> int:
     }
     (out_dir / "canonical.json").write_text(json.dumps(canonical, indent=2, ensure_ascii=False))
     (out_dir / "conversation.md").write_text(
-        render_markdown(metadata["room_id"], all_utterances, events)
+        render_markdown(metadata["room_id"], all_utterances, events, metadata.get("tracks"))
     )
 
     print(f"done: {len(all_utterances)} utterances, {len(events)} events")
