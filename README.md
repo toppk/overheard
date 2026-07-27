@@ -171,7 +171,9 @@ the agent feedback sessions that shaped this surface.
 ## Development
 
 Requirements: Node.js >= 20, npm >= 11.10, ffmpeg (+ffprobe), Python 3,
-openssl, and optionally podman/docker for container work.
+openssl, and optionally podman/docker for container work. All npm
+scripts run from the repo root — `web/` has no package.json of its own
+(the frontend builds via `astro --root web`).
 
 ### Standalone (fastest loop)
 
