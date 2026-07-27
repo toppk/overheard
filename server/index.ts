@@ -64,16 +64,38 @@ app.get(/^\/archive\/([a-zA-Z0-9_-]+)\.md$/, (req, res) => {
   res.status(404).type('text/plain').send('no such archive');
 });
 
-// The human URL, content-negotiated: browsers get the app shell; anything
-// that doesn't ask for HTML (curl, WebFetch, agents) gets the markdown
-// transcript directly, so a pasted link works without JavaScript.
+// The human URL is universal: proper q-ranked content negotiation (a client
+// preferring markdown gets markdown), and the HTML branch server-renders
+// the transcript into the shell so browser-like fetchers (WebFetch) that
+// genuinely prefer HTML still receive real content, JS or not. The client
+// app hydrates over the server-rendered block.
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function archiveHtml(roomId: string): string {
+  const html = fs.readFileSync(path.join(webDist, 'archive/index.html'), 'utf8');
+  const p = conversationPath(roomId);
+  if (!fs.existsSync(p)) return html;
+  const ssr =
+    `<article id="ssr-transcript"><pre class="transcript">${escapeHtml(fs.readFileSync(p, 'utf8'))}</pre>` +
+    `<p><a href="/archive/${roomId}.md">transcript (markdown)</a> ` +
+    `<a href="/recordings/${roomId}/transcripts/canonical.json">structured dump (json)</a></p></article>`;
+  const placeholder = '<p class="narrative">reading cold storage…</p>';
+  if (!html.includes(placeholder)) {
+    console.warn('[archive] SSR placeholder missing from built page; serving shell');
+    return html;
+  }
+  return html.replace(placeholder, ssr);
+}
+
 app.get('/archive/:room', (req, res) => {
-  const wantsHtml = (req.headers.accept ?? '').includes('text/html');
-  if (!wantsHtml) {
-    const p = conversationPath(req.params.room.replace(/[^a-zA-Z0-9_-]/g, ''));
+  const roomId = req.params.room.replace(/[^a-zA-Z0-9_-]/g, '');
+  const best = req.accepts(['text/markdown', 'text/html']);
+  if (best === 'text/markdown') {
+    const p = conversationPath(roomId);
     if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
   }
-  res.sendFile(path.join(webDist, 'archive/index.html'));
+  res.type('text/html').send(archiveHtml(roomId));
 });
 
 // Machine-readable front door for agents.
