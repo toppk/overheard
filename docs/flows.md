@@ -19,8 +19,9 @@ flowchart TD
     SEALEDNOTE["flatlined notice<br/><i>no second run</i>"]
   end
 
-  subgraph ARCH ["/archive/{id}  — cold storage"]
-    PARSED["transcript dump<br/>+ raw channels + json"]
+  subgraph ARCH ["cold storage"]
+    STACKS["/storage — the stacks<br/>toggle filters + full-text search"]
+    PARSED["/archive/{id} — transcript dump<br/>+ raw channels + json<br/>(also .md and content-negotiated)"]
     PARSING["wintermute parsing…<br/><i>auto-refreshes 5s</i>"]
     UNPARSED["unparsed / parse failed<br/><i>wake wintermute</i>"]
     NOTFOUND["no such construct"]
@@ -34,7 +35,9 @@ flowchart TD
 
   LOBBY -- "spin up a construct<br/>GET /api/dig → navigate" --> JOIN
   LOBBY -- "patch in (hot construct)" --> JOIN
-  LOBBY -- "access (cold storage)" --> PARSED
+  LOBBY -- "access (last 24h list)" --> PARSED
+  LOBBY -- "browse the stacks" --> STACKS
+  STACKS -- "access" --> PARSED
 
   JOIN -- "patch in: mic permission<br/>+ ws join ok" --> CALL
   JOIN -- "join rejected: sealed" --> SEALEDNOTE

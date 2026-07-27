@@ -4,9 +4,11 @@ Self-hosted, browser-based voice rooms that record every participant as a
 separate audio track and produce an overlap-aware post-meeting transcript.
 See `voice_meeting_transcription_system_plan.md` for the full design.
 
-This is a proof of concept covering plan phases 1–3: two-person voice calls
-(mediasoup SFU), per-speaker Ogg/Opus recording to local disk, and offline
-per-track transcription with a merged conversation transcript.
+This is a working proof of concept: voice rooms (mediasoup SFU),
+per-speaker Ogg/Opus recording with RTP-clock-anchored timing, offline
+name-aware transcription, an overlap-aware compositor that weaves in room
+events (joins, mutes, deafens) as stage directions, a searchable archive
+(embedded Turso + native FTS), and an agent-friendly HTTP surface.
 
 ## Requirements
 
@@ -14,6 +16,7 @@ per-track transcription with a merged conversation transcript.
 - ffmpeg (recording) and ffprobe (loopback test)
 - Python 3 with `faster-whisper` for transcription
 - openssl (only for generating the self-signed HTTPS cert)
+- optionally docker/podman for the container build
 
 ## Quick start
 
@@ -34,10 +37,17 @@ tool:
   in cold storage, and a running traffic feed. Everyone is a superuser;
   nothing is private, everything is remembered.
 - **Constructs** — rooms, spun up on demand with generated jitsi-style names
-  (`neon-static-relay`). Anyone can jack into a hot construct from the grid
+  (`neon-static-relay`). Anyone can patch into a hot construct from the grid
   or via its `/chat/{room-id}` URL. Every channel is taped per-speaker to
-  `recordings/{room-id}/tracks/*.ogg`. Your own mic level is shown as a VU
-  meter ("your signal") so you know you're being heard.
+  `recordings/{room-id}/tracks/*.ogg`. In-call, a TX/RX console shows live
+  meters for what you send and what you hear, with the mute ("silence your
+  mic") and deafen ("go deaf") controls attached to the flow they govern.
+  Mute/deafen/join/leave land in the transcript as stage directions, placed
+  by client-claimed, clock-synced timestamps.
+- **Grid ambience** — sitting on the lobby, synthesized chimes (and
+  optional browser notifications) announce arrivals, new constructs, and
+  patch-ins. An orientation deck (3-page help popup) glows until first
+  opened.
 - **Two identities, on purpose** — your operator handle belongs to the grid;
   inside a construct you can patch in under any alias. The tape and the
   transcript record only the alias. Nothing links it back to your grid
@@ -132,12 +142,19 @@ turn auto-transcription off. Per-room logs land in
 .venv/bin/python transcription/transcribe.py recordings/<room-id> [--model small]
 ```
 
+Participant names are automatically fed to the decoder as vocabulary;
+add standing domain terms with `TRANSCRIBE_VOCAB` (or `--vocab` manually).
+
 Outputs in `recordings/<room-id>/transcripts/`:
 
 - `tracks/<participant>.json` — raw per-track ASR with word timings
-- `canonical.json` — merged utterances on the room timeline, with overlap flags
-- `conversation.md` — readable transcript; simultaneous speech is marked
-  `[overlapping]` rather than flattened into a false sequence
+- `canonical.json` — merged utterances on the room timeline, with overlap
+  flags and typed room events (both claim and receipt timestamps)
+- `conversation.md` — readable transcript: per-utterance timestamps, stage
+  directions for joins/leaves/mutes/deafens, simultaneous speech marked
+  `[overlapping]` rather than flattened, and a "raw channels" section
+  linking the source audio. Utterances spanning a speaker's own mute are
+  split at the boundary using word timings.
 
 ## API (agent-friendly)
 
@@ -146,11 +163,20 @@ Outputs in `recordings/<room-id>/transcripts/`:
 - `GET /archive/{room-id}.md` — the transcript as plain markdown, one URL,
   no JavaScript. The human URL (`/archive/{room-id}`) content-negotiates:
   non-HTML clients get the markdown too.
-- `GET /api/archives` — enumerate/search archives (`q` full-text,
-  `handles`, `sinceMs`, duration bounds, `offset`/`limit`).
+- `GET /api/archives` — enumerate/search archives: `q` full-text,
+  `handles`, `since` (absolute epoch-ms/ISO — use for polling), `sinceMs`
+  (relative window), duration bounds, `offset`/`limit`. Unparseable
+  numeric params are a 400, never a silent no-filter.
 - `GET /api/archives/{room-id}` — full JSON: metadata (tracks, events),
-  transcript status, rendered conversation.
-- `GET /recordings/{room-id}/…` — raw per-speaker Ogg/Opus.
+  transcript status, rendered conversation. Also served for
+  `Accept: application/json` on the human URL.
+- `GET /api/storage/facets` — participant handles with room counts.
+- `GET /recordings/{room-id}/…` — raw per-speaker Ogg/Opus (each
+  transcript's "raw channels" section links these).
+
+The transcript markdown is a complete door: speech, stage directions,
+overlap marks, and links to the source audio. See `docs/agent-qa.md` for
+the agent feedback sessions that shaped this surface.
 
 ## Development
 
@@ -170,23 +196,36 @@ GitHub release).
 ## Layout
 
 ```
-server/          Node/TypeScript control plane: signaling, rooms, recording
-  index.ts       HTTP(S) + WebSocket signaling server
-  room.ts        room/peer state, mediasoup router and transports
-  recorder.ts    per-producer PlainTransport → ffmpeg → Ogg/Opus
+server/          Node/TypeScript control plane
+  index.ts       HTTP(S) + WebSocket signaling, API routes, llms.txt
+  room.ts        room/peer state, events, mediasoup router and transports
+  recorder.ts    per-producer recording: RTP timing relay → ffmpeg → Ogg/Opus
+  transcriber.ts wintermute: spawns the offline transcription pipeline
+  archives.ts    filesystem source of truth for sealed rooms
+  db.ts          cold-storage index: embedded Turso + native FTS
+  lobby.ts       grid presence and traffic feed
 web/             Astro frontend (built statically, served by the server)
-  src/lib/call.ts        mediasoup-client call logic
-  src/pages/chat/        the room page (/chat/{room-id})
+  src/lib/       call logic, diagnostics, chimes
+  src/pages/     the grid (/), constructs (/chat), archives (/archive),
+                 the stacks (/storage)
 transcription/   offline faster-whisper pipeline + transcript compositor
-recordings/      local audio + transcripts, one directory per room (gitignored)
+site/            GitHub Pages project page
+docs/            flow diagrams, agent QA record
+recordings/      audio + transcripts, one dir per room (gitignored)
+data/            rebuildable search index (gitignored)
 ```
 
 ## PoC limitations
 
 - No TURN (coturn) yet; direct connectivity to the server is required.
-- No authentication; anyone with a room URL can join.
-- Storage is the local filesystem, metadata is JSON (no Postgres/S3 yet).
-- The transcript compositor is a simple timestamp merge with overlap flags,
-  not the full masking/dominance model from the plan.
-- Recording starts when a participant publishes audio and stops when they
-  leave; mid-call reconnects create a new track file.
+- No authentication or identity: handles and aliases are self-claimed,
+  `participant_id` is per-room, and everyone is a superuser (see
+  SECURITY.md — this is currently by design, and the ACL/identity design
+  is being deliberately pondered before building).
+- Object storage is the local filesystem; the Turso index is rebuildable
+  from it, not authoritative.
+- The compositor handles overlap flags, event interleaving, and
+  mute-boundary splitting — but not yet the plan's dominance/masking model
+  ("probably unheard") or multi-pass transcript revisions.
+- Mid-call reconnects create a new track file; foreground-only on iPad
+  (screen lock drops the call).

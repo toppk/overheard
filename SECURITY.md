@@ -46,7 +46,13 @@ product. The server operator can hear everything. E2EE (e.g. SFrame) would
 blind the server and is structurally incompatible with this architecture.
 
 At rest: recordings, transcripts, and metadata are plaintext files under
-`recordings/`. Disk encryption is the deployment's responsibility.
+`recordings/`, and the search index (`data/overheard.db`) additionally
+holds full transcript text. Disk encryption is the deployment's
+responsibility.
+
+The HTTP API (`/llms.txt` documents it) exposes all of the above for read,
+including full-text search over every transcript — by design, to the same
+everyone-is-a-superuser standard as the UI.
 
 Inside the host, mediasoup forwards decrypted RTP to the recording process
 over the loopback interface only.

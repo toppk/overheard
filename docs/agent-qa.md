@@ -97,6 +97,30 @@ The agent's closing generalization, worth keeping: "a filter can be
 working-as-coded and broken-as-named, and only the consumer's reading
 counts… Both times the code was fine and the contract lied."
 
+## Round 6 — close-out
+
+Final verification: all numeric-param 400s confirmed, no regressions, and
+`sinceMs=-1 → 0` praised as "better than I asked for" — the last −1 ms is
+an empty window, while `since=-1` correctly returns everything (a 1969
+instant). Same input, opposite correct answers, both right for what the
+parameter means: "that's the naming distinction actually paying off."
+
+The agent's corrections to OUR framing, worth as much as its bug reports:
+
+- The generalization wasn't arrived at cleanly — "I read the name, formed
+  an expectation, and reported the gap as a defect in the code. The
+  consumer's reading counted, and the consumer was also wrong about the
+  cause. Both halves are the lesson."
+- The exchange worked because of how feedback was received: "Twice you
+  gave me the correction rather than the accommodation, and both times
+  the result was better than what I'd asked for. That's not a property of
+  the QA — it's a property of how you took it."
+
+Closing assessment: "Genuinely good system. The .md-as-complete-door
+design, attribution-by-routing, and refusing to flatten overlapping
+speech are the three decisions I'd keep hardest if anything ever
+pressures them."
+
 ## Standing lessons
 
 - Hand the artifact to its intended consumer early; the agent found in
