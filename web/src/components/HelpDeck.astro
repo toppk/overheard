@@ -6,7 +6,8 @@
 
 <div class="help-overlay" id="help-overlay" hidden>
   <div class="help-deck" role="dialog" aria-label="orientation">
-    <div class="help-page" data-page="1">
+    <div class="help-body">
+    <div class="help-page active" data-page="1">
       <h2>01 // the loop</h2>
       <pre class="help-art">
       ┌──────────────┐
@@ -35,7 +36,7 @@
       </p>
     </div>
 
-    <div class="help-page" data-page="2" hidden>
+    <div class="help-page" data-page="2">
       <h2>02 // the grid</h2>
       <ul class="help-list">
         <li><b>operators online</b> — everyone with the grid open right now. you appear the moment you jack in.</li>
@@ -47,7 +48,7 @@
       </ul>
     </div>
 
-    <div class="help-page" data-page="3" hidden>
+    <div class="help-page" data-page="3">
       <h2>03 // inside a construct</h2>
       <ul class="help-list">
         <li><b>patch in</b> — join under your handle, or <i>use an alias</i>: the room and its tapes only ever know the alias. nothing links it to your grid handle.</li>
@@ -58,7 +59,7 @@
       </ul>
     </div>
 
-    <div class="help-page" data-page="4" hidden>
+    <div class="help-page" data-page="4">
       <h2>04 // beyond the grid</h2>
       <p class="help-note">
         this instance is one node. the project itself lives outside,
@@ -69,6 +70,8 @@
         <li><a href="https://github.com/toppk/overheard" target="_blank" rel="noopener">the source</a> — self-host your own grid; releases ship as a container image.</li>
         <li><a href="https://github.com/toppk/overheard/blob/main/SECURITY.md" target="_blank" rel="noopener">the security posture</a> — read before you say anything you'd want forgotten. nothing here is.</li>
       </ul>
+    </div>
+
     </div>
 
     <div class="help-nav">
@@ -116,6 +119,14 @@
     padding: 1.2rem 1.4rem;
   }
   .help-deck h2 { margin-top: 0.2rem; }
+  /* All pages occupy the same grid cell: the body is always as tall as the
+     tallest page, so the nav row never shifts between pages. */
+  .help-body { display: grid; }
+  .help-page {
+    grid-area: 1 / 1;
+    visibility: hidden;
+  }
+  .help-page.active { visibility: visible; }
   .help-art {
     color: var(--cyan);
     font-size: 0.8rem;
@@ -151,7 +162,7 @@
 
   function show(p: number) {
     page = Math.max(0, Math.min(pages.length - 1, p));
-    pages.forEach((el, i) => (el.hidden = i !== page));
+    pages.forEach((el, i) => el.classList.toggle('active', i === page));
     count.textContent = `${page + 1} / ${pages.length}`;
     prevBtn.style.visibility = page === 0 ? 'hidden' : 'visible';
     nextBtn.style.visibility = page === pages.length - 1 ? 'hidden' : 'visible';
