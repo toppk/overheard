@@ -79,6 +79,24 @@ ken/toppk/Bob/bob as separate self-claimed handles with case splits;
 `handles=` filtering is only as good as what people typed. Evidence for
 the identity/ACL work.
 
+## Round 5 — the pattern, generalized
+
+The agent verified `since` on eight decisive cases (including the one that
+proves sealed-at-or-after semantics: a room that STARTED before the cutoff
+but sealed after it correctly matches), retracted its round-4 "ignored"
+diagnosis with a monotonic-window proof, and then found the last instance
+of the shape: `sinceMs=notanumber` silently returned the full corpus with
+a 200 — a filter that appears to work while filtering nothing.
+
+Actions: every numeric param (sinceMs, minDurMs, maxDurMs, offset, limit)
+now 400s with the param named when present but unparseable. Deliberate
+non-changes: empty string still means "not provided"; `since=-1` stays
+valid (a 1969 epoch ms is a real instant — the agent's own call).
+
+The agent's closing generalization, worth keeping: "a filter can be
+working-as-coded and broken-as-named, and only the consumer's reading
+counts… Both times the code was fine and the contract lied."
+
 ## Standing lessons
 
 - Hand the artifact to its intended consumer early; the agent found in
