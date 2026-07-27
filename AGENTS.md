@@ -59,6 +59,29 @@ fight over port 3000 and the RTC range; stop one before starting the other.
   and docs stay plain. Commit messages follow `git log`'s style: a short
   declarative summary line, no conventional-commit prefixes.
 
+## Deployed data outlives the code
+
+Archives are derived artifacts: metadata + raw audio + raw per-track ASR
+are the durable inputs, and canonical.json / conversation.md are computed
+from them. A fix to the derivation (transcribe.py's merge logic, the
+markdown renderer) silently leaves every already-archived room on the old
+behavior — shipping the fix is half the job; decide what happens to
+existing deployments' stored output too.
+
+- Prefer **re-merging from the preserved raw ASR** over re-running
+  whisper: it applies the corrected logic while keeping archived wording
+  bit-identical. A whisper rerun can change what the archive *says*, and
+  archived speech is content, not cache.
+- Don't assume every room dir matches the current output format. The
+  owner's deployment goes back to the earliest versions and is preserved
+  deliberately (nostalgia included) — some rooms predate the raw-ASR
+  output, old schemas exist, and "fix" must never mean bulk-rewriting
+  history without asking.
+- Today there is one deployment (the podman unit above), so a hand-run
+  backfill after a fix is workable. Once there are more, a fix that
+  changes derived data needs a real story — versioned outputs or a
+  backfill/migration path — not a script someone remembers to run.
+
 ## Lessons from real agent sessions
 
 Distilled from reviewing actual contributions — each of these was violated
