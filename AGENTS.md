@@ -58,3 +58,34 @@ fight over port 3000 and the RTC range; stop one before starting the other.
   cold storage, wintermute — see the orientation deck and README); code
   and docs stay plain. Commit messages follow `git log`'s style: a short
   declarative summary line, no conventional-commit prefixes.
+
+## Lessons from real agent sessions
+
+Distilled from reviewing actual contributions — each of these was violated
+at least once, at real cost:
+
+- **The contract moves with the code, in the same commit.** If you change
+  anything an outside consumer parses — `/archive/{id}.md`, API params,
+  transcript line grammar — update `llms.txt` (it lives in
+  `server/index.ts`) and the README's API section too. This repo's
+  standing lesson (docs/agent-qa.md, rounds 4–5): "the code was fine and
+  the contract lied." Read that file before touching the API surface.
+- **Never silently undo an owner decision.** If a change reverses
+  something the owner previously asked for (a feature, a wording, a
+  layout), say so explicitly in the commit message and get a yes first.
+  Improving on a decision is welcome; erasing it quietly is not.
+- **One logical change per commit**, with the house message style: a
+  declarative summary line, a body that explains why (and what it might
+  break), no conventional-commit prefixes. "Improve X" with no body is
+  not enough for anyone auditing later.
+- **Push when you're done.** Unpushed work never meets CI, and CI is the
+  only reviewer that's always awake. If it isn't pushed, it isn't done.
+- **Finish the deploy loop** (build image, restart the unit — see above)
+  when your change should be live, and verify against the live instance
+  (`curl -sk https://localhost:3000/...`), not just the build.
+- **Interactive niceties have non-obvious halves**: sticky navs need
+  `scroll-margin-top` on their anchor targets; disabled links need
+  `tabindex="-1"`, not just `pointer-events: none`; `aria-current` wants a
+  real value ("location"), not a bare attribute toggle.
+- When in doubt about tone or vocabulary, the orientation deck
+  (`web/src/components/HelpDeck.astro`) is the canonical voice sample.
