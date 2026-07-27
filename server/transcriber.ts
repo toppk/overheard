@@ -35,13 +35,22 @@ export function transcribeRoom(
   const meta = path.join(roomDir, 'metadata.json');
   if (!fs.existsSync(meta)) return false;
   const model = process.env.TRANSCRIBE_MODEL ?? 'small';
+  // Standing domain vocabulary for this deployment (participant names are
+  // added automatically by the script itself).
+  const vocab = process.env.TRANSCRIBE_VOCAB;
 
   active.set(roomId, 'running');
   const logPath = path.join(roomDir, 'transcribe.log');
   const log = fs.openSync(logPath, 'w');
   const child = spawn(
     pythonBin(),
-    ['transcription/transcribe.py', roomDir, '--model', model],
+    [
+      'transcription/transcribe.py',
+      roomDir,
+      '--model',
+      model,
+      ...(vocab ? ['--vocab', vocab] : []),
+    ],
     { stdio: ['ignore', log, log] },
   );
   console.log(`[scribe] started for ${roomId} (model=${model}, pid=${child.pid})`);

@@ -129,7 +129,9 @@ import '../../styles/neon.css';
         if (transcript === 'done' && conversation) {
           content.appendChild(renderTranscript(conversation, metadata));
           const links = document.createElement('p');
-          links.innerHTML = `<a href="/recordings/${roomId}/transcripts/canonical.json">structured dump (json)</a>`;
+          links.innerHTML =
+            `<a href="/archive/${roomId}.md">transcript (markdown)</a> ` +
+            `<a href="/recordings/${roomId}/transcripts/canonical.json">structured dump (json)</a>`;
           content.appendChild(links);
         } else {
           const p = document.createElement('p');

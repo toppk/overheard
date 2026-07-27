@@ -92,6 +92,7 @@ Environment variables:
 | `DB_PATH` | `data/overheard.db` | cold-storage index (Turso embedded, FTS over transcripts; rebuildable from `RECORDINGS_DIR`) |
 | `OPUS_BITRATE` | `96000` | opus max average bitrate clients encode (and thus record) at; browser default is ~32k |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
+| `TRANSCRIBE_VOCAB` | unset | comma-separated domain terms to bias ASR toward (participant names are automatic) |
 | `TRANSCRIBE_DISABLED` | unset | set to disable auto-transcription |
 
 No TURN server yet — clients must be able to reach an announced IP
@@ -137,6 +138,19 @@ Outputs in `recordings/<room-id>/transcripts/`:
 - `canonical.json` — merged utterances on the room timeline, with overlap flags
 - `conversation.md` — readable transcript; simultaneous speech is marked
   `[overlapping]` rather than flattened into a false sequence
+
+## API (agent-friendly)
+
+`GET /llms.txt` on a running instance documents everything. Highlights:
+
+- `GET /archive/{room-id}.md` — the transcript as plain markdown, one URL,
+  no JavaScript. The human URL (`/archive/{room-id}`) content-negotiates:
+  non-HTML clients get the markdown too.
+- `GET /api/archives` — enumerate/search archives (`q` full-text,
+  `handles`, `sinceMs`, duration bounds, `offset`/`limit`).
+- `GET /api/archives/{room-id}` — full JSON: metadata (tracks, events),
+  transcript status, rendered conversation.
+- `GET /recordings/{room-id}/…` — raw per-speaker Ogg/Opus.
 
 ## Development
 

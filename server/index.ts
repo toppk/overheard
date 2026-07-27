@@ -44,11 +44,83 @@ app.use('/recordings', express.static(path.resolve(config.recordingsDir)));
 
 // Astro builds /chat and /archive as static pages; ids live in the URL path.
 app.get('/chat/:room', (_req, res) => res.sendFile(path.join(webDist, 'chat/index.html')));
-app.get('/archive/:room', (_req, res) => res.sendFile(path.join(webDist, 'archive/index.html')));
 app.get('/storage', (_req, res) => res.sendFile(path.join(webDist, 'storage/index.html')));
 
-// Cold-storage browser: filters + FTS over transcripts.
-app.get('/api/storage', async (req, res) => {
+function conversationPath(roomId: string): string {
+  return path.join(config.recordingsDir, roomId, 'transcripts', 'conversation.md');
+}
+
+// The transcript as plain markdown — the one-URL door for agents.
+app.get(/^\/archive\/([a-zA-Z0-9_-]+)\.md$/, (req, res) => {
+  const roomId = req.params[0];
+  const p = conversationPath(roomId);
+  if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
+  if (readMetadata(roomId)) {
+    return res
+      .status(404)
+      .type('text/plain')
+      .send(`no transcript yet (status: ${transcriptionStatus(roomId)})`);
+  }
+  res.status(404).type('text/plain').send('no such archive');
+});
+
+// The human URL, content-negotiated: browsers get the app shell; anything
+// that doesn't ask for HTML (curl, WebFetch, agents) gets the markdown
+// transcript directly, so a pasted link works without JavaScript.
+app.get('/archive/:room', (req, res) => {
+  const wantsHtml = (req.headers.accept ?? '').includes('text/html');
+  if (!wantsHtml) {
+    const p = conversationPath(req.params.room.replace(/[^a-zA-Z0-9_-]/g, ''));
+    if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
+  }
+  res.sendFile(path.join(webDist, 'archive/index.html'));
+});
+
+// Machine-readable front door for agents.
+app.get('/llms.txt', (_req, res) => {
+  res.type('text/plain').send(`# overheard
+
+Self-hosted voice rooms with per-speaker recording and honest post-meeting
+transcripts. Every finished conversation ("archive") is public on this
+instance. Terminology: rooms are "constructs"; a finished room is
+"flatlined"/sealed (permanent); transcription is "wintermute".
+
+## Get a transcript (start here)
+- GET /archive/{room-id}.md          — transcript as plain markdown
+- GET /archive/{room-id}             — same, via content negotiation
+                                       (non-HTML Accept gets markdown)
+- GET /api/archives/{room-id}        — JSON: { metadata, transcript,
+                                       conversation } where metadata has
+                                       tracks[] and events[] (join/leave/
+                                       mute/unmute/deafen, room-relative ms)
+
+## Find conversations
+- GET /api/archives                  — list archives (newest first);
+                                       params: q (full-text search over
+                                       transcripts), handles (comma-sep,
+                                       must all be present), sinceMs,
+                                       minDurMs, maxDurMs, offset, limit.
+                                       Returns { total, rows }.
+- GET /api/storage/facets            — participant handles with room counts
+
+## Raw audio
+- GET /recordings/{room-id}/{track-file}  — per-speaker Ogg/Opus; track
+                                            paths are in metadata.tracks[]
+
+## Notes for agents
+- transcript status values: none | running | done | failed. Poll
+  /api/archives until done after a room ends (~seconds to minutes).
+- participant_id values are PER-ROOM, not stable identities. Display
+  names/aliases are self-claimed. There is no identity system yet.
+- Transcript format: "**name**" speaker headers, "(mm:ss) text" utterances,
+  "*[ name action — mm:ss ]*" stage directions, "*[overlapping]*" marks
+  genuine simultaneous speech.
+- Timestamps are room-relative; absolute start is metadata.started_at (UTC).
+`);
+});
+
+// Cold-storage browser + agent list endpoint: filters + FTS over transcripts.
+const storageHandler = async (req: express.Request, res: express.Response) => {
   const q = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined;
   const handles = typeof req.query.handles === 'string' && req.query.handles
     ? req.query.handles.split(',').filter(Boolean)
@@ -69,7 +141,9 @@ app.get('/api/storage', async (req, res) => {
     console.error('[api/storage] query failed:', err);
     res.status(500).json({ error: 'query failed' });
   }
-});
+};
+app.get('/api/storage', storageHandler);
+app.get('/api/archives', storageHandler);
 
 app.get('/api/storage/facets', async (_req, res) => {
   res.json({ handles: await participantFacets() });
