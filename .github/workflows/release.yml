@@ -31,6 +31,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
       - name: GitHub release
         uses: softprops/action-gh-release@v3
         with:

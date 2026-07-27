@@ -1,6 +1,10 @@
 ---
-// Orientation deck: 3-page help popup. Include once per page, inline where
-// the trigger should sit. The trigger glows until first opened.
+// Orientation deck: multi-page help popup. Include once per page, inline
+// where the trigger should sit. The trigger glows until first opened.
+// OVERHEARD_VERSION is stamped in at build time by the release workflow;
+// anything built outside a release (dev server, local images) shows "dev".
+const version = process.env.OVERHEARD_VERSION || 'dev';
+const build = version === 'dev' ? 'dev' : `v${version}`;
 ---
 <button class="cmd help-trigger" id="help-trigger">orientation</button>
 
@@ -70,6 +74,7 @@
         <li><a href="https://github.com/toppk/overheard" target="_blank" rel="noopener">the source</a> — self-host your own grid; releases ship as a container image.</li>
         <li><a href="https://github.com/toppk/overheard/blob/main/SECURITY.md" target="_blank" rel="noopener">the security posture</a> — read before you say anything you'd want forgotten. nothing here is.</li>
       </ul>
+      <p class="help-note help-build">this node is running build {build}.</p>
     </div>
 
     </div>
@@ -136,6 +141,7 @@
     margin: 0.6rem 0;
   }
   .help-note { color: var(--dim); font-style: italic; font-size: 0.9rem; }
+  .help-build { margin-top: 0.8rem; font-size: 0.8rem; }
   .help-list { margin: 0.6rem 0; }
   .help-list li { padding: 0.3rem 0; }
   .help-list b { color: var(--cyan); font-weight: 600; }

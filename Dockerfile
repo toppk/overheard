@@ -1,11 +1,14 @@
 # Build the Astro frontend (no install scripts: this stage never runs
 # mediasoup, so skip its worker download/check entirely)
 FROM node:22-trixie-slim AS webbuild
+# Stamped into the orientation deck; the release workflow passes the tag's
+# version, every other build (CI, local podman) gets the "dev" default.
+ARG VERSION=dev
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --ignore-scripts
 COPY web ./web
-RUN npm run build:web
+RUN OVERHEARD_VERSION=$VERSION npm run build:web
 
 # Runtime: Node control plane + ffmpeg recorder + Python transcription.
 # trixie (not bookworm): the prebuilt mediasoup worker needs glibc >= 2.38.
