@@ -255,9 +255,30 @@ import HelpDeck from '../components/HelpDeck.astro';
       const pingsBtn = document.getElementById('pings-btn') as HTMLButtonElement;
       const syncToggleLabels = () => {
         chimesBtn.textContent = `chimes: ${chimesOn ? 'on' : 'off'}`;
-        pingsBtn.textContent = `pings: ${pingsOn ? 'on' : 'off'}`;
+        // Pings has browser-owned states beyond on/off: surface them
+        // instead of letting a click silently do nothing.
+        if (!('Notification' in window)) {
+          pingsBtn.textContent = 'pings: unavailable';
+          pingsBtn.classList.add('danger');
+          pingsBtn.title = 'this browser does not offer notifications here';
+        } else if (Notification.permission === 'denied') {
+          pingsBtn.textContent = 'pings: blocked';
+          pingsBtn.classList.add('danger');
+          pingsBtn.title =
+            "notifications are denied in the browser's site settings — allow them there, then click again";
+          if (pingsOn) {
+            pingsOn = false;
+            localStorage.setItem('overheard-pings', '0');
+          }
+        } else {
+          pingsBtn.classList.remove('danger');
+          pingsBtn.title = '';
+          pingsBtn.textContent = `pings: ${pingsOn ? 'on' : 'off'}`;
+        }
       };
       syncToggleLabels();
+      // Permission can change in site settings while the tab is open.
+      document.addEventListener('visibilitychange', syncToggleLabels);
       chimesBtn.addEventListener('click', () => {
         chimesOn = !chimesOn;
         localStorage.setItem('overheard-chimes', chimesOn ? '1' : '0');
@@ -269,10 +290,24 @@ import HelpDeck from '../components/HelpDeck.astro';
         syncToggleLabels();
       });
       pingsBtn.addEventListener('click', async () => {
+        if (!('Notification' in window)) {
+          diag('pings unavailable: no Notification API');
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          // Re-check in case the user just unblocked in site settings.
+          const perm = await Notification.requestPermission();
+          diag(`pings blocked by browser site settings (recheck: ${perm})`);
+          syncToggleLabels();
+          return;
+        }
         if (!pingsOn && Notification.permission !== 'granted') {
           const perm = await Notification.requestPermission();
           diag(`notification permission: ${perm}`);
-          if (perm !== 'granted') return;
+          if (perm !== 'granted') {
+            syncToggleLabels();
+            return;
+          }
         }
         pingsOn = !pingsOn;
         localStorage.setItem('overheard-pings', pingsOn ? '1' : '0');
