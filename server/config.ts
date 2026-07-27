@@ -23,6 +23,9 @@ export const config = {
   rtcMinPort: Number(process.env.RTC_MIN_PORT ?? 40000),
   rtcMaxPort: Number(process.env.RTC_MAX_PORT ?? 40100),
   recordingsDir: process.env.RECORDINGS_DIR ?? 'recordings',
+  // Directory holding cert.pem (full chain) + key.pem; HTTPS turns on when
+  // both exist.
+  certsDir: process.env.CERTS_DIR ?? 'certs',
   // Deployment-level audio policy, shipped to clients in the join response
   // (the encoder lives in the browser, but the tradeoff is the server's).
   // Recording is codec-copy, so this is also exactly what the tape gets.

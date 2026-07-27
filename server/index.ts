@@ -252,8 +252,8 @@ function startScribe(roomId: string): boolean {
 // Use HTTPS when certs exist (required for mic access from non-localhost,
 // e.g. iPad Safari on the LAN). Generate with scripts/gen-certs.sh.
 let server: http.Server | https.Server;
-const certFile = 'certs/cert.pem';
-const keyFile = 'certs/key.pem';
+const certFile = path.join(config.certsDir, 'cert.pem');
+const keyFile = path.join(config.certsDir, 'key.pem');
 if (fs.existsSync(certFile) && fs.existsSync(keyFile)) {
   server = https.createServer(
     { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) },

@@ -105,6 +105,7 @@ Environment variables:
 | `MEDIASOUP_ANNOUNCED_IPS` | all non-internal IPv4s | comma-separated ICE candidate IPs (set to `public,lan` explicitly on multi-homed hosts) |
 | `RTC_MIN_PORT` / `RTC_MAX_PORT` | `40000` / `40100` | WebRTC media port range |
 | `RECORDINGS_DIR` | `recordings` | where audio/transcripts land |
+| `CERTS_DIR` | `certs` | directory holding `cert.pem` + `key.pem`; their presence switches on HTTPS |
 | `DB_PATH` | `data/overheard.db` | cold-storage index (Turso embedded, FTS over transcripts; rebuildable from `RECORDINGS_DIR`) |
 | `OPUS_BITRATE` | `96000` | opus max average bitrate clients encode (and thus record) at; browser default is ~32k |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
@@ -115,20 +116,38 @@ No TURN server yet — clients must be able to reach an announced IP
 directly, which works for the common client-behind-NAT case since the
 server is the media endpoint.
 
-### Docker
+### Container (docker/podman)
+
+The image keeps all durable state under a single `/data` mount:
+
+```
+data/
+  recordings/     audio, transcripts, metadata (source of truth)
+  certs/          cert.pem (full chain) + key.pem -> HTTPS on
+  index/          rebuildable search index (overheard.db)
+  hf-cache/       whisper model cache (avoids re-downloading)
+  overheard.env   instance config (see env table above)
+```
 
 ```sh
-docker build -t overheard .
-docker run --network host \
-  -v $PWD/recordings:/app/recordings \
-  -v $PWD/certs:/app/certs \
-  overheard
+podman run -d --name overheard --network host \
+  -v /path/to/data:/data \
+  --env-file /path/to/data/overheard.env \
+  ghcr.io/toppk/overheard:latest
 ```
 
 Host networking is the pragmatic choice for WebRTC's port range; with
 bridged networking you must publish `3000/tcp` and the full RTC range and
 keep `MEDIASOUP_ANNOUNCED_IPS` pointing at the host. Tagged releases
 (`v*`) build and push `ghcr.io/<owner>/overheard` via GitHub Actions.
+
+To run it as a user service surviving reboots:
+
+```sh
+cd ~/.config/systemd/user && podman generate systemd --new --files --name overheard
+systemctl --user daemon-reload && systemctl --user enable --now container-overheard
+loginctl enable-linger   # start at boot without a login session
+```
 
 ## Transcription
 

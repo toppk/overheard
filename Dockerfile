@@ -21,9 +21,15 @@ COPY transcription ./transcription
 RUN python3 -m venv .venv && .venv/bin/pip install --no-cache-dir -r transcription/requirements.txt
 COPY --from=webbuild /app/web/dist ./web/dist
 
-# Recordings and certs live on volumes; certs/ presence switches on HTTPS.
-VOLUME ["/app/recordings", "/app/certs"]
+# Single data directory: mount one volume at /data and everything durable
+# lives inside it — recordings, TLS certs (their presence switches on
+# HTTPS), the rebuildable search index, and the whisper model cache.
+ENV NODE_ENV=production \
+    RECORDINGS_DIR=/data/recordings \
+    CERTS_DIR=/data/certs \
+    DB_PATH=/data/index/overheard.db \
+    HF_HOME=/data/hf-cache
+VOLUME ["/data"]
 EXPOSE 3000/tcp 40000-40100/udp 40000-40100/tcp
 
-ENV NODE_ENV=production
 CMD ["npx", "tsx", "server/index.ts"]
