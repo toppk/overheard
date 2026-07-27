@@ -39,7 +39,10 @@ import '../../styles/neon.css';
         for (const t of metadata.tracks ?? []) speakerColor(String(t.display_name));
 
         const names = [...colorFor.keys()].sort((a, b) => b.length - a.length);
-        for (const raw of md.split('\n')) {
+        // The markdown ends with a "## raw channels" section for agents
+        // fetching the .md; this page renders its own players for those.
+        const body = md.replace(/\n---\s*\n+## raw channels\b[\s\S]*$/, '');
+        for (const raw of body.split('\n')) {
           const line = raw.trimEnd();
           if (!line || line.startsWith('# ')) continue;
 
