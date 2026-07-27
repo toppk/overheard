@@ -14,14 +14,42 @@ import '../../styles/neon.css';
       below, exactly as it went to tape.
     </p>
 
-    <div id="content"><p class="narrative">reading cold storage…</p></div>
+    <nav class="archive-nav" aria-label="archive navigation">
+      <a href="/">back to the grid</a>
+      <a href="#manifest" data-section-link="manifest">tape manifest</a>
+      <a href="#transcript" data-section-link="transcript">transcript dump</a>
+      <a href="#audio" data-section-link="audio" class="is-unavailable" aria-disabled="true" tabindex="-1">raw channels</a>
+    </nav>
 
-    <p><a href="/">back to the grid</a></p>
+    <div id="content"><p class="narrative">reading cold storage…</p></div>
 
     <script>
       const roomId = location.pathname.split('/').filter(Boolean).pop()!;
       document.getElementById('room-name')!.textContent = roomId;
       const content = document.getElementById('content')!;
+      const archiveNav = document.querySelector('.archive-nav')!;
+
+      function updateSectionProgress() {
+        const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-section-link]')];
+        const sections = links
+          .map((link) => ({ link, section: document.getElementById(link.dataset.sectionLink!) }))
+          .filter((item): item is { link: HTMLAnchorElement; section: HTMLElement } => Boolean(item.section));
+        const readingLine = window.scrollY + archiveNav.getBoundingClientRect().height + 12;
+
+        for (let i = 0; i < sections.length; i++) {
+          const { link, section } = sections[i];
+          const start = section.offsetTop;
+          const end = sections[i + 1]?.section.offsetTop ?? document.documentElement.scrollHeight;
+          const progress = Math.max(0, Math.min(100, ((readingLine - start) / Math.max(1, end - start)) * 100));
+          const active = readingLine >= start && readingLine < end;
+          link.classList.toggle('is-active', active);
+          link.style.setProperty('--section-progress', `${active ? progress : 0}%`);
+          if (active) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        }
+      }
+      addEventListener('scroll', updateSectionProgress, { passive: true });
+      addEventListener('resize', updateSectionProgress);
 
       // Each speaker gets a stable color by order of appearance.
       const SPEAKER_COLORS = ['#4be4e4', '#e94fa1', '#9ece6a', '#e0af68', '#7aa2f7', '#f7768e'];
@@ -116,16 +144,22 @@ import '../../styles/neon.css';
         const { metadata, transcript, conversation } = await res.json();
         content.innerHTML = '';
 
+        const h2m = document.createElement('h2');
+        h2m.id = 'manifest';
+        h2m.textContent = 'tape manifest';
+        content.appendChild(h2m);
+
         const info = document.createElement('div');
         info.className = 'panel';
         const started = new Date(metadata.started_at).toLocaleString();
         const mins = Math.max(1, Math.round(
           (new Date(metadata.ended_at).getTime() - new Date(metadata.started_at).getTime()) / 60000));
         const names = [...new Set(metadata.tracks.map((t: any) => t.display_name))].join(', ') || 'no one';
-        info.innerHTML = `operators: ${names}<br>ran ${started} · ~${mins} min · ${metadata.tracks.length} taped channel(s)`;
+        info.innerHTML = `voices: ${names}<br>ran ${started} · ~${mins} min · ${metadata.tracks.length} taped channel(s)`;
         content.appendChild(info);
 
         const h2t = document.createElement('h2');
+        h2t.id = 'transcript';
         h2t.textContent = 'transcript dump';
         content.appendChild(h2t);
 
@@ -160,8 +194,13 @@ import '../../styles/neon.css';
 
         if (metadata.tracks.length > 0) {
           const h2a = document.createElement('h2');
+          h2a.id = 'audio';
           h2a.textContent = 'raw channels';
           content.appendChild(h2a);
+          const audioLink = document.querySelector<HTMLAnchorElement>('[data-section-link="audio"]')!;
+          audioLink.classList.remove('is-unavailable');
+          audioLink.removeAttribute('aria-disabled');
+          audioLink.removeAttribute('tabindex');
           for (const t of metadata.tracks) {
             const div = document.createElement('div');
             div.innerHTML = `${t.display_name} — on channel at +${Math.round(t.room_time_start_ms / 1000)}s`;
@@ -172,6 +211,7 @@ import '../../styles/neon.css';
             content.appendChild(div);
           }
         }
+        updateSectionProgress();
       }
       load();
     </script>

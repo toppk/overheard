@@ -208,4 +208,39 @@ pre.transcript {
   font-size: 0.8em;
 }
 
+/* Archive navigation stays within reach while a long transcript scrolls by.
+   The active section's dim fill advances with the reading position. */
+.archive-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  margin: 1rem -0.35rem;
+  padding: 0.35rem;
+  background: rgba(5, 7, 10, 0.94);
+  border-block: 1px solid var(--border);
+  backdrop-filter: blur(5px);
+}
+.archive-nav a {
+  --section-progress: 0%;
+  flex: 0 0 auto;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  background: linear-gradient(to right, rgba(75, 228, 228, 0.16) var(--section-progress), transparent var(--section-progress));
+}
+.archive-nav a.is-active {
+  color: var(--cyan);
+  border-color: var(--border);
+}
+.archive-nav a.is-unavailable {
+  color: var(--dim);
+  pointer-events: none;
+}
+/* Anchor targets clear the sticky nav instead of scrolling under it. */
+#content h2 {
+  scroll-margin-top: 3.5rem;
+}
+
 audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }
