@@ -50,11 +50,41 @@ function conversationPath(roomId: string): string {
   return path.join(config.recordingsDir, roomId, 'transcripts', 'conversation.md');
 }
 
+const yamlString = (value: unknown) => JSON.stringify(String(value));
+
+// `conversation.md` is canonical transcript output. Archive facts belong to
+// the serving layer: they can change without regenerating a transcription.
+function archiveMarkdown(roomId: string): string | null {
+  const p = conversationPath(roomId);
+  const metadata = readMetadata(roomId);
+  if (!fs.existsSync(p) || !metadata) return null;
+
+  const tracks = metadata.tracks ?? [];
+  const voices = [...new Set(tracks.map((track: any) => String(track.display_name)))];
+  const startedAt = String(metadata.started_at ?? '');
+  const endedAt = String(metadata.ended_at ?? '');
+  const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  const durationSeconds = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs / 1000)) : 0;
+  const frontMatter = [
+    '---',
+    `room: ${yamlString(metadata.room_id ?? roomId)}`,
+    `started_at: ${yamlString(startedAt)}`,
+    `ended_at: ${yamlString(endedAt)}`,
+    `duration_seconds: ${durationSeconds}`,
+    'voices:',
+    ...voices.map((voice) => `  - ${yamlString(voice)}`),
+    `taped_channels: ${tracks.length}`,
+    '---',
+    '',
+  ].join('\n');
+  return frontMatter + fs.readFileSync(p, 'utf8');
+}
+
 // The transcript as plain markdown — the one-URL door for agents.
 app.get(/^\/archive\/([a-zA-Z0-9_-]+)\.md$/, (req, res) => {
   const roomId = req.params[0];
-  const p = conversationPath(roomId);
-  if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
+  const markdown = archiveMarkdown(roomId);
+  if (markdown) return res.type('text/markdown').send(markdown);
   if (readMetadata(roomId)) {
     return res
       .status(404)
@@ -74,6 +104,8 @@ const escapeHtml = (s: string) =>
 
 function archiveHtml(roomId: string): string {
   const html = fs.readFileSync(path.join(webDist, 'archive/index.html'), 'utf8');
+  // SSR embeds the raw transcript, not archiveMarkdown(): YAML front matter
+  // is contract for .md consumers, noise as leading content in an HTML view.
   const p = conversationPath(roomId);
   if (!fs.existsSync(p)) return html;
   const ssr =
@@ -92,8 +124,8 @@ app.get('/archive/:room', (req, res) => {
   const roomId = req.params.room.replace(/[^a-zA-Z0-9_-]/g, '');
   const best = req.accepts(['text/markdown', 'text/html', 'application/json']);
   if (best === 'text/markdown') {
-    const p = conversationPath(roomId);
-    if (fs.existsSync(p)) return res.type('text/markdown').send(fs.readFileSync(p, 'utf8'));
+    const markdown = archiveMarkdown(roomId);
+    if (markdown) return res.type('text/markdown').send(markdown);
   }
   if (best === 'application/json') {
     const meta = readMetadata(roomId);
@@ -118,7 +150,11 @@ instance. Terminology: rooms are "constructs"; a finished room is
 "flatlined"/sealed (permanent); transcription is "wintermute".
 
 ## Get a transcript (start here)
-- GET /archive/{room-id}.md          — transcript as plain markdown
+- GET /archive/{room-id}.md          — transcript as plain markdown,
+                                       prefixed with YAML front matter:
+                                       room, started_at, ended_at (UTC),
+                                       duration_seconds, voices[],
+                                       taped_channels
 - GET /archive/{room-id}             — same, via content negotiation
                                        (non-HTML Accept gets markdown)
 - GET /api/archives/{room-id}        — JSON: { metadata, transcript,
