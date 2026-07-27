@@ -9,7 +9,7 @@ import HelpDeck from '../components/HelpDeck.astro';
     <title>overheard // the grid</title>
   </head>
   <body>
-    <h1>overheard // the grid<span id="whoami-wrap" style="display:none;"><span style="color:var(--dim);"> // operating as </span><span id="whoami" style="text-transform:none;"></span></span></h1>
+    <h1>overheard // the grid</h1>
     <p class="narrative">
       The sky above the port is the color of a dead channel. You jack in.
       Constructs hang in the grid like lit windows — some hot with voices,
@@ -81,9 +81,20 @@ import HelpDeck from '../components/HelpDeck.astro';
         }
         const users = document.getElementById('users')!;
         users.innerHTML = '';
-        for (const name of new Set<string>([...state.users, ...inConstruct.keys()])) {
+        // You first — handles are easy to change and easy to forget — then
+        // everyone else alphabetically.
+        const names = [...new Set<string>([...state.users, ...inConstruct.keys()])].sort(
+          (a, b) => (a === myName ? -1 : b === myName ? 1 : a.localeCompare(b)),
+        );
+        for (const name of names) {
           const li = document.createElement('li');
           li.textContent = name;
+          if (name === myName) {
+            const you = document.createElement('span');
+            you.className = 'narrative';
+            you.textContent = ' (you)';
+            li.appendChild(you);
+          }
           const room = inConstruct.get(name);
           if (room) {
             const tag = document.createElement('span');
@@ -212,8 +223,6 @@ import HelpDeck from '../components/HelpDeck.astro';
       function enterGrid(name: string) {
         diag(`entering the grid as ${JSON.stringify(name)}`);
         myName = name;
-        document.getElementById('whoami')!.textContent = name;
-        document.getElementById('whoami-wrap')!.style.display = 'inline';
         document.getElementById('session-info')!.style.display = 'inline';
         namePanel.style.display = 'none';
         commons.style.display = 'block';
@@ -245,7 +254,6 @@ import HelpDeck from '../components/HelpDeck.astro';
         nameInput.value = last ?? '';
         commons.style.display = 'none';
         document.getElementById('session-info')!.style.display = 'none';
-        document.getElementById('whoami-wrap')!.style.display = 'none';
         namePanel.style.display = 'block';
       });
 

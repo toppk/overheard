@@ -141,7 +141,7 @@ import '../../styles/neon.css';
           const me = document.createElement('li');
           me.textContent = `${nameInput.value || 'you'} (you)`;
           peersEl.appendChild(me);
-          for (const p of peers) {
+          for (const p of [...peers].sort((a, b) => a.name.localeCompare(b.name))) {
             const li = document.createElement('li');
             li.textContent = p.name;
             peersEl.appendChild(li);
