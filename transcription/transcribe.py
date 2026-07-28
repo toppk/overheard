@@ -156,8 +156,36 @@ def split_utterances_at_events(utterances: list[dict], events: list[dict]) -> li
 MIN_OVERLAP_MS = 500
 
 
+def _voiced_spans(u: dict) -> list[tuple[int, int]]:
+    words = u.get("words") or []
+    if words:
+        return [(w["start_ms"], w["end_ms"]) for w in words]
+    return [(u["start_ms"], u["end_ms"])]
+
+
+def _intersection_ms(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> int:
+    """Total intersection of two sorted span lists (two-pointer sweep)."""
+    i = j = total = 0
+    while i < len(a) and j < len(b):
+        lo = max(a[i][0], b[j][0])
+        hi = min(a[i][1], b[j][1])
+        if hi > lo:
+            total += hi - lo
+        if a[i][1] <= b[j][1]:
+            i += 1
+        else:
+            j += 1
+    return total
+
+
 def mark_overlaps(utterances: list[dict]) -> None:
-    """Flag utterances that genuinely overlap another speaker's speech."""
+    """Flag utterances that genuinely overlap another speaker's speech.
+
+    Measured on word timings, not utterance spans: whisper's VAD strings
+    sparse backchannels ("mm-hm … yeah") into segments spanning a minute or
+    more of mostly silence, and span intersection would mark everything the
+    other speaker said in that window as overlapping.
+    """
     for u in utterances:
         u["overlapped"] = False
         u["overlaps_with"] = []
@@ -167,7 +195,7 @@ def mark_overlaps(utterances: list[dict]) -> None:
                 break
             if a["speaker_id"] == b["speaker_id"]:
                 continue
-            intersection = min(a["end_ms"], b["end_ms"]) - max(a["start_ms"], b["start_ms"])
+            intersection = _intersection_ms(_voiced_spans(a), _voiced_spans(b))
             if intersection < MIN_OVERLAP_MS:
                 continue
             a["overlapped"] = b["overlapped"] = True
