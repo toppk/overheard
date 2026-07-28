@@ -38,6 +38,12 @@ export function transcribeRoom(
   // Standing domain vocabulary for this deployment (participant names are
   // added automatically by the script itself).
   const vocab = process.env.TRANSCRIBE_VOCAB;
+  // Language policy: 'multi' (default) re-detects the language per segment
+  // so code-switching speakers are transcribed as spoken; 'auto' locks each
+  // track to the language whisper detects in its first 30s (which covertly
+  // translates any later language switch); any other value is an ISO code
+  // ('en', 'ru', …) forcing that language for the whole room.
+  const language = process.env.TRANSCRIBE_LANGUAGE ?? 'multi';
 
   active.set(roomId, 'running');
   const logPath = path.join(roomDir, 'transcribe.log');
@@ -50,6 +56,11 @@ export function transcribeRoom(
       '--model',
       model,
       ...(vocab ? ['--vocab', vocab] : []),
+      ...(language === 'multi'
+        ? ['--multilingual']
+        : language === 'auto'
+          ? []
+          : ['--language', language]),
     ],
     { stdio: ['ignore', log, log] },
   );

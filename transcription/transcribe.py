@@ -19,18 +19,30 @@ from pathlib import Path
 
 
 def transcribe_track(
-    model, audio_path: Path, offset_ms: int, speaker: dict, vocab: str | None = None
+    model,
+    audio_path: Path,
+    offset_ms: int,
+    speaker: dict,
+    vocab: str | None = None,
+    multilingual: bool = False,
+    language: str | None = None,
 ) -> list[dict]:
     # Participant handles (and any --vocab terms) are fed to the decoder so
     # names come out as written instead of near-homophones ("toppk" -> "top K").
-    segments, _info = model.transcribe(
+    # multilingual re-detects the language per segment (code-switching):
+    # without it, whisper locks the language from the track's first 30s and
+    # covertly *translates* any other language spoken later in the track.
+    segments, info = model.transcribe(
         str(audio_path),
         vad_filter=True,
         word_timestamps=True,
         beam_size=5,
         hotwords=vocab,
         initial_prompt=f"A voice call between {vocab}." if vocab else None,
+        multilingual=multilingual,
+        language=language,
     )
+    print(f"  detected language: {info.language} (p={info.language_probability:.2f})")
     utterances = []
     for i, seg in enumerate(segments):
         utterances.append(
@@ -305,6 +317,12 @@ def main() -> int:
         default=None,
         help="extra comma-separated terms to bias decoding toward (names are automatic)",
     )
+    parser.add_argument(
+        "--multilingual",
+        action="store_true",
+        help="re-detect language per segment so code-switching speakers are "
+        "transcribed in the language spoken instead of covertly translated",
+    )
     args = parser.parse_args()
 
     metadata_path = args.room_dir / "metadata.json"
@@ -341,7 +359,13 @@ def main() -> int:
         print(f"transcribing {track['display_name']} ({audio_path.name})…")
         try:
             utterances = transcribe_track(
-                model, audio_path, track["room_time_start_ms"], track, vocab=vocab
+                model,
+                audio_path,
+                track["room_time_start_ms"],
+                track,
+                vocab=vocab,
+                multilingual=args.multilingual,
+                language=args.language,
             )
         except Exception as err:  # noqa: BLE001 — a dead track must not sink the room
             print(

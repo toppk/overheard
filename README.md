@@ -125,6 +125,7 @@ All configuration is environment variables (put them in
 | `OPUS_BITRATE` | `96000` | opus max average bitrate clients encode (and thus record) at; browser default is ~32k |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |
 | `TRANSCRIBE_VOCAB` | unset | comma-separated domain terms to bias ASR toward (participant names are automatic) |
+| `TRANSCRIBE_LANGUAGE` | `multi` | `multi` re-detects language per segment (code-switching speakers come out as spoken); `auto` locks each track to the language detected in its first 30s; an ISO code (`en`, `ru`, …) forces one language |
 | `TRANSCRIBE_DISABLED` | unset | set to disable auto-transcription |
 
 ## Transcription
