@@ -63,7 +63,11 @@ fight over port 3000 and the RTC range; stop one before starting the other.
 
 Archives are derived artifacts: metadata + raw audio + raw per-track ASR
 are the durable inputs, and canonical.json / conversation.md are computed
-from them. A fix to the derivation (transcribe.py's merge logic, the
+from them. docs/transcript-forensics.md has the working recipes for
+diagnosing this pipeline against real sessions — timeline forensics
+(events vs tape vs ASR), whisper-free re-merges for dry runs and
+backfills, A/B experiments inside the deployed container, and rescuing
+derived data from the search index. A fix to the derivation (transcribe.py's merge logic, the
 markdown renderer) silently leaves every already-archived room on the old
 behavior — shipping the fix is half the job; decide what happens to
 existing deployments' stored output too.
