@@ -23,10 +23,6 @@ import HelpDeck from '../components/HelpDeck.astro';
         <input id="name-input" placeholder="your handle" autocomplete="name" />
         <button class="cmd" id="enter-btn">jack in</button>
       </div>
-      <div class="ghost-row">
-        or <button class="cmd" id="ghost-btn">become a ghost</button>
-        <span class="ghost-note">— walk the grid unnamed. ghosts fade after a few hours.</span>
-      </div>
     </div>
 
     <div id="commons" style="display:none;">
@@ -59,17 +55,14 @@ import HelpDeck from '../components/HelpDeck.astro';
     </p>
 
     <script>
-      import { diag, getHandle, setHandle, setGhostHandle, clearHandle, GHOST_HANDLE } from '../lib/diag';
+      import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
       import { chime, primeChimes, type ChimeKind } from '../lib/chimes';
 
       diag('page load: / (the grid)', { referrer: document.referrer || '(none)' });
       const namePanel = document.getElementById('name-panel')!;
       const commons = document.getElementById('commons')!;
       const nameInput = document.getElementById('name-input') as HTMLInputElement;
-      // Prefill with the stored handle — unless it's a ghost's: that name
-      // is nobody's name and must never become the next login's default.
-      const prefill = getHandle();
-      nameInput.value = prefill && prefill !== GHOST_HANDLE ? prefill : '';
+      nameInput.value = getHandle() ?? '';
 
       function fmtAgo(iso: string): string {
         const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -240,7 +233,7 @@ import HelpDeck from '../components/HelpDeck.astro';
       document.getElementById('enter-btn')!.addEventListener('click', () => {
         const name = nameInput.value.trim();
         if (!name) {
-          // No accidental ghosts: entering unnamed is its own button.
+          // Every operator carries a handle; unnamed entry is not a thing.
           diag('click: jack in with empty handle — refused, focusing input');
           nameInput.focus();
           return;
@@ -248,10 +241,6 @@ import HelpDeck from '../components/HelpDeck.astro';
         diag(`click: jack in (handle=${JSON.stringify(name)})`);
         setHandle(name);
         enterGrid(name);
-      });
-      document.getElementById('ghost-btn')!.addEventListener('click', () => {
-        diag('click: become a ghost');
-        enterGrid(setGhostHandle());
       });
       nameInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') document.getElementById('enter-btn')!.click();
@@ -264,15 +253,11 @@ import HelpDeck from '../components/HelpDeck.astro';
         // Burning the handle kills auto-entry, but the login input still
         // remembers the last name used — convenience, not identity.
         const last = getHandle();
-        // A ghost's name is nobody's name: never offer it back as a prefill.
-        if (last && last !== GHOST_HANDLE) localStorage.setItem('overheard-last-handle', last);
+        if (last) localStorage.setItem('overheard-last-handle', last);
         clearHandle();
         reconnect = false;
         ws?.close();
-        nameInput.value =
-          last && last !== GHOST_HANDLE
-            ? last
-            : (localStorage.getItem('overheard-last-handle') ?? '');
+        nameInput.value = last ?? '';
         commons.style.display = 'none';
         document.getElementById('session-info')!.style.display = 'none';
         namePanel.style.display = 'block';

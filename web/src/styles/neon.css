@@ -244,7 +244,3 @@ pre.transcript {
 }
 
 audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }
-
-/* The unnamed entrance: present but not competing with jack in. */
-.ghost-row { margin-top: 0.6rem; font-size: 0.85rem; color: var(--dim); }
-.ghost-note { font-style: italic; }
