@@ -10,7 +10,7 @@ export function diag(...args: unknown[]): void {
 }
 
 /** Ghosts are guests, not residents: their session fades on its own. */
-const GHOST_HANDLE = 'null-handle';
+export const GHOST_HANDLE = 'null-handle';
 const GHOST_TTL_MS = 4 * 60 * 60 * 1000;
 
 export function getHandle(): string | null {
