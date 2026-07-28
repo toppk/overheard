@@ -13,9 +13,9 @@ interface LobbyEvent {
 export class Lobby {
   private users = new Map<WebSocket, { name: string }>();
   private events: LobbyEvent[] = [];
-  private getStateExtras: () => { rooms: unknown; archives: unknown };
+  private getStateExtras: () => { rooms: unknown; archives: unknown; archiveTotal: number };
 
-  constructor(getStateExtras: () => { rooms: unknown; archives: unknown }) {
+  constructor(getStateExtras: () => { rooms: unknown; archives: unknown; archiveTotal: number }) {
     this.getStateExtras = getStateExtras;
   }
 
@@ -45,6 +45,7 @@ export class Lobby {
       users: [...this.users.values()].map((u) => u.name),
       rooms: extras.rooms,
       archives: extras.archives,
+      archiveTotal: extras.archiveTotal,
       events: this.events.slice(-30),
     };
   }
