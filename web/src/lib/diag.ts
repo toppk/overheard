@@ -20,7 +20,14 @@ export function getHandle(): string | null {
     localStorage.removeItem('overheard-ghost-expires');
     localStorage.removeItem('overheard-name');
   }
-  const name = localStorage.getItem('overheard-name');
+  let name = localStorage.getItem('overheard-name');
+  if (name === GHOST_HANDLE && !localStorage.getItem('overheard-ghost-expires')) {
+    // A null-handle stored before ghosts had expiries (or with the expiry
+    // key lost) would haunt the grid forever; burn it.
+    diag('legacy ghost handle with no expiry: burning it');
+    localStorage.removeItem('overheard-name');
+    name = null;
+  }
   diag(`localStorage read: handle = ${name === null ? 'null (not set)' : JSON.stringify(name)}`);
   return name;
 }
