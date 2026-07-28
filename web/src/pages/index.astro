@@ -23,6 +23,10 @@ import HelpDeck from '../components/HelpDeck.astro';
         <input id="name-input" placeholder="your handle" autocomplete="name" />
         <button class="cmd" id="enter-btn">jack in</button>
       </div>
+      <div class="ghost-row">
+        or <button class="cmd" id="ghost-btn">become a ghost</button>
+        <span class="ghost-note">— walk the grid unnamed. ghosts fade after a few hours.</span>
+      </div>
     </div>
 
     <div id="commons" style="display:none;">
@@ -55,7 +59,7 @@ import HelpDeck from '../components/HelpDeck.astro';
     </p>
 
     <script>
-      import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
+      import { diag, getHandle, setHandle, setGhostHandle, clearHandle } from '../lib/diag';
       import { chime, primeChimes, type ChimeKind } from '../lib/chimes';
 
       diag('page load: / (the grid)', { referrer: document.referrer || '(none)' });
@@ -231,10 +235,20 @@ import HelpDeck from '../components/HelpDeck.astro';
       }
 
       document.getElementById('enter-btn')!.addEventListener('click', () => {
-        const name = nameInput.value.trim() || 'null-handle';
-        diag(`click: jack in (input=${JSON.stringify(nameInput.value)} -> handle=${JSON.stringify(name)})`);
+        const name = nameInput.value.trim();
+        if (!name) {
+          // No accidental ghosts: entering unnamed is its own button.
+          diag('click: jack in with empty handle — refused, focusing input');
+          nameInput.focus();
+          return;
+        }
+        diag(`click: jack in (handle=${JSON.stringify(name)})`);
         setHandle(name);
         enterGrid(name);
+      });
+      document.getElementById('ghost-btn')!.addEventListener('click', () => {
+        diag('click: become a ghost');
+        enterGrid(setGhostHandle());
       });
       nameInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') document.getElementById('enter-btn')!.click();
@@ -247,7 +261,8 @@ import HelpDeck from '../components/HelpDeck.astro';
         // Burning the handle kills auto-entry, but the login input still
         // remembers the last name used — convenience, not identity.
         const last = getHandle();
-        if (last) localStorage.setItem('overheard-last-handle', last);
+        // A ghost's name is nobody's name: never offer it back as a prefill.
+        if (last && last !== 'null-handle') localStorage.setItem('overheard-last-handle', last);
         clearHandle();
         reconnect = false;
         ws?.close();

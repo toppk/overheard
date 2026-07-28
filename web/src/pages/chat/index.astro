@@ -154,7 +154,14 @@ import '../../styles/neon.css';
       });
 
       joinBtn.addEventListener('click', async () => {
-        const name = nameInput.value.trim() || 'null-handle';
+        const name = nameInput.value.trim();
+        if (!name) {
+          // No accidental ghosts: deliberate ones arrive from the grid
+          // already carrying the null-handle.
+          diag('click: patch in with empty name — refused, focusing input');
+          nameInput.focus();
+          return;
+        }
         const aliased = name !== storedHandle;
         diag(`click: patch in (name=${JSON.stringify(name)}, ${aliased ? 'alias — grid handle untouched' : 'operator handle'})`);
         try {
