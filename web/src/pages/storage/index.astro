@@ -82,12 +82,19 @@ import '../../styles/neon.css';
           : ar.transcript === 'running' ? '<span class="status-running">parsing…</span>'
           : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
           : 'unparsed';
-        let html = `<span class="status-sealed">${esc(ar.roomId)}</span> — ${who} · sealed ${fmtAgo(ar.endedAt)} · ${fmtDur(ar.durationMs)} · ${status} `;
-        li.innerHTML = html;
+        li.className = 'record';
+        const head = document.createElement('div');
+        head.className = 'record-head';
+        head.innerHTML = `<span class="status-sealed">${esc(ar.roomId)}</span>`;
         const a = document.createElement('a');
         a.href = `/archive/${ar.roomId}`;
         a.textContent = 'access';
-        li.appendChild(a);
+        head.appendChild(a);
+        li.appendChild(head);
+        const meta = document.createElement('div');
+        meta.className = 'record-meta';
+        meta.innerHTML = `${who} · sealed ${fmtAgo(ar.endedAt)} · ${fmtDur(ar.durationMs)} · ${status}`;
+        li.appendChild(meta);
         if (ar.snippet) {
           const div = document.createElement('div');
           div.className = 'narrative';

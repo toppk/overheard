@@ -247,3 +247,16 @@ pre.transcript {
 }
 
 audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }
+
+/* Two-line archive records: name + access on the head line, dim indented
+   metadata on its own line. Structure does the grouping — deterministic
+   shape at any width, no zebra striping needed. */
+.record { padding: 0.3rem 0.3rem 0.35rem; }
+.record:hover { background: rgba(75, 228, 228, 0.05); }
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.record-meta { color: var(--dim); margin-left: 1rem; }

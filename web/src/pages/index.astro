@@ -132,17 +132,38 @@ import HelpDeck from '../components/HelpDeck.astro';
         link.innerHTML = `${state.archiveTotal ?? state.archives.length} construct(s) in cold storage · <a href="/storage">browse the stacks</a>`;
         for (const ar of state.archives) {
           const li = document.createElement('li');
-          const who = ar.participants.length ? ar.participants.join(', ') : 'no one spoke';
-          const daemon =
-            ar.transcript === 'done' ? 'parsed'
-            : ar.transcript === 'running' ? '<span class="status-running">wintermute parsing…</span>'
-            : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
-            : 'unparsed';
-          li.innerHTML = `<span class="status-sealed">${ar.roomId}</span> — ${who} · flatlined ${fmtAgo(ar.endedAt)} · ${daemon} `;
+          li.className = 'record';
+          const head = document.createElement('div');
+          head.className = 'record-head';
+          const name = document.createElement('span');
+          name.className = 'status-sealed';
+          name.textContent = ar.roomId;
+          head.appendChild(name);
           const a = document.createElement('a');
           a.href = `/archive/${ar.roomId}`;
           a.textContent = 'access';
-          li.appendChild(a);
+          head.appendChild(a);
+          li.appendChild(head);
+          // Built from text nodes, not innerHTML: participant handles are
+          // operator-typed strings.
+          const who = ar.participants.length ? ar.participants.join(', ') : 'no one spoke';
+          const meta = document.createElement('div');
+          meta.className = 'record-meta';
+          meta.append(`${who} · flatlined ${fmtAgo(ar.endedAt)} · `);
+          if (ar.transcript === 'running') {
+            const s = document.createElement('span');
+            s.className = 'status-running';
+            s.textContent = 'wintermute parsing…';
+            meta.appendChild(s);
+          } else if (ar.transcript === 'failed') {
+            const s = document.createElement('span');
+            s.className = 'status-failed';
+            s.textContent = 'parse failed';
+            meta.appendChild(s);
+          } else {
+            meta.append(ar.transcript === 'done' ? 'parsed' : 'unparsed');
+          }
+          li.appendChild(meta);
           archives.appendChild(li);
         }
 
