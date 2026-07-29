@@ -80,6 +80,9 @@ a, .cmd {
   border: none;
   font: inherit;
   padding: 0;
+  /* The < brackets > are pseudo-elements: never let a line break tear
+     them off their label. */
+  white-space: nowrap;
 }
 a::before, .cmd::before { content: '< '; color: var(--dim); }
 a::after, .cmd::after { content: ' >'; color: var(--dim); }
