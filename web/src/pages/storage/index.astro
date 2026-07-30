@@ -36,14 +36,17 @@ import '../../styles/neon.css';
       </div>
     </div>
 
-    <p class="narrative" id="summary">reading the stacks…</p>
-    <ul id="results"></ul>
-    <p><button class="cmd" id="more-btn" style="display:none;">pull more from the stacks</button></p>
+    <div class="stacks-bar">
+      <span class="narrative summary" id="summary">reading the stacks…</span>
+      <button class="cmd" id="more-btn" style="display:none;">load more</button>
+      <a href="/">back to the grid</a>
+    </div>
 
-    <p><a href="/">back to the grid</a></p>
+    <ul id="results"></ul>
 
     <script>
       import { diag } from '../../lib/diag';
+      import { fmtAgo } from '../../lib/ago';
 
       diag('page load: /storage (the stacks)');
       const qInput = document.getElementById('q') as HTMLInputElement;
@@ -62,13 +65,6 @@ import '../../styles/neon.css';
       };
 
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const fmtAgo = (iso: string) => {
-        const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-        if (mins < 1) return 'just now';
-        if (mins < 60) return `${mins}m ago`;
-        if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
-        return `${Math.round(mins / 1440)}d ago`;
-      };
       const fmtDur = (ms: number) => {
         const m = Math.round(ms / 60000);
         return m < 1 ? '<1 min' : `${m} min`;
@@ -128,7 +124,9 @@ import '../../styles/neon.css';
         if (!append) results.innerHTML = '';
         for (const ar of data.rows) results.appendChild(renderRow(ar));
         state.offset += data.rows.length;
-        summary.textContent = `${data.total} construct(s) match${state.q ? ` "${state.q}"` : ''}.`;
+        const partial = state.offset < state.total ? ` · ${state.offset} pulled` : '';
+        summary.textContent = `${state.total} construct${state.total === 1 ? ' matches' : 's match'}${state.q ? ` "${state.q}"` : ''}${partial}.`;
+        moreBtn.textContent = `load ${Math.min(20, state.total - state.offset)} more`;
         moreBtn.style.display = state.offset < state.total ? 'inline' : 'none';
       }
 

@@ -134,6 +134,25 @@ li::before { content: '▸ '; color: var(--dim); }
   border-color: var(--cyan);
   box-shadow: 0 0 8px rgba(75, 228, 228, 0.25);
 }
+/* Between the filters and the results, a slim sticky strip — match count
+   and the exits — stays put while long result lists scroll beneath it. */
+.stacks-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  margin: 1rem 0;
+  padding: 0.35rem 0.3rem;
+  background: rgba(5, 7, 10, 0.94);
+  border-block: 1px solid var(--border);
+  backdrop-filter: blur(5px);
+}
+.stacks-bar .summary { margin: 0; }
+.stacks-bar > :last-child { margin-left: auto; }
+
 mark {
   background: none;
   color: var(--amber);
