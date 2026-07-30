@@ -39,7 +39,7 @@ import '../../styles/neon.css';
     <div class="stacks-bar">
       <span class="narrative summary" id="summary">reading the stacks…</span>
       <button class="cmd" id="more-btn" style="display:none;">load more</button>
-      <a href="/">back to the grid</a>
+      <a href="/">// the grid</a>
     </div>
 
     <ul id="results"></ul>
@@ -63,6 +63,23 @@ import '../../styles/neon.css';
         offset: 0,
         total: 0,
       };
+
+      // The search lives in the URL: refresh keeps it, the browser's back
+      // button restores it exactly, and a query is a shareable address.
+      const boot = new URLSearchParams(location.search);
+      state.q = boot.get('q') ?? '';
+      state.sinceMs = boot.get('sinceMs') ?? '';
+      state.minDurMs = boot.get('minDurMs') ?? '';
+      state.maxDurMs = boot.get('maxDurMs') ?? '';
+      for (const h of (boot.get('handles') ?? '').split(',').filter(Boolean)) state.handles.add(h);
+      qInput.value = state.q;
+      const markOn = (containerId: string, match: (b: HTMLElement) => boolean) => {
+        document.getElementById(containerId)!.querySelectorAll('.toggle').forEach((b) => {
+          b.classList.toggle('on', match(b as HTMLElement));
+        });
+      };
+      markOn('date-toggles', (b) => (b.dataset.since ?? '') === state.sinceMs);
+      markOn('dur-toggles', (b) => (b.dataset.min ?? '') === state.minDurMs && (b.dataset.max ?? '') === state.maxDurMs);
 
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const fmtDur = (ms: number) => {
@@ -111,6 +128,10 @@ import '../../styles/neon.css';
         if (state.minDurMs) params.set('minDurMs', state.minDurMs);
         if (state.maxDurMs) params.set('maxDurMs', state.maxDurMs);
         if (state.handles.size) params.set('handles', [...state.handles].join(','));
+        if (!append) {
+          const qs = params.toString();
+          history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+        }
         params.set('offset', String(state.offset));
         params.set('limit', '20');
         diag(`stacks query: ${params.toString()}`);
@@ -159,6 +180,7 @@ import '../../styles/neon.css';
         for (const h of handles) {
           const btn = document.createElement('button');
           btn.className = 'toggle';
+          btn.classList.toggle('on', state.handles.has(h.handle));
           btn.textContent = `${h.handle} (${h.rooms})`;
           btn.addEventListener('click', () => {
             const on = btn.classList.toggle('on');

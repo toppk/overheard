@@ -260,6 +260,9 @@ pre.transcript {
   color: var(--dim);
   pointer-events: none;
 }
+/* Section jumps act here; the trailing place link leaves — push it to
+   the far edge so the two kinds don't read as one row of peers. */
+.archive-nav a:last-child { margin-left: auto; }
 /* Anchor targets clear the sticky nav instead of scrolling under it. */
 #content h2 {
   scroll-margin-top: 3.5rem;
