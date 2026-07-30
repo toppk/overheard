@@ -43,6 +43,28 @@ recreates the container from whatever `localhost/overheard:dev` currently
 is — no `podman run` needed. The standalone dev server and the container
 fight over port 3000 and the RTC range; stop one before starting the other.
 
+## Releases
+
+`npm version X.Y.Z --no-git-tag-version`, commit as `Release X.Y.Z`,
+tag `vX.Y.Z`, push master and the tag. The release workflow builds the
+ghcr image and creates the GitHub release — but its auto-generated body
+is just a compare link, and a compare link is not a release note.
+
+Hand-written notes are part of the release, not optional. After the
+workflow creates the release, replace the body:
+
+```sh
+gh release edit vX.Y.Z --notes-file <notes.md>
+```
+
+Write them in v0.9.0's voice: one line naming the release's theme, then
+short bold-led sections grouped by surface (**The call**, **The tape**,
+**The transcript**, **The stacks**, …) in the product's fiction —
+describing what changed for the person using it, not restating commits.
+Source the content from `git log vPREV..vNEW`, close with known gaps
+when honest, and keep the **Full Changelog** compare link as the last
+line. v0.9.0, v0.9.1, and v0.10.0 are the models.
+
 ## Cross-cutting seams to know about
 
 - The transcript markdown (`conversation.md`) is written by
