@@ -58,6 +58,13 @@ fight over port 3000 and the RTC range; stop one before starting the other.
   cold storage, wintermute — see the orientation deck and README); code
   and docs stay plain. Commit messages follow `git log`'s style: a short
   declarative summary line, no conventional-commit prefixes.
+- Every call client mirrors its diagnostics over the room websocket into
+  the server log as `[trace <room>/<name>] …` (newProducer received,
+  consume, play refused + error name, transport states, carrier
+  lost/restored, wake lock). For any live-call bug report, `podman logs
+  overheard` holds both sides of the story — read it before theorizing;
+  a missing trace line is itself the answer (that client never processed
+  the event).
 
 ## Deployed data outlives the code
 

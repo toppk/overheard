@@ -32,7 +32,13 @@ tool:
   what you send and what you hear, with the mute ("silence your mic") and
   deafen ("go deaf") controls attached to the flow they govern. Mute/deafen/
   join/leave land in the transcript as stage directions, placed by
-  client-claimed, clock-synced timestamps.
+  client-claimed, clock-synced timestamps. The deck also watches the
+  carrier itself: RTP byte counters are polled so a **NO CARRIER** warning
+  appears when your voice stops reaching the grid (or nothing arrives) —
+  the VU meter alone can't tell you that. Incoming audio the browser
+  refuses to autoplay is held and reopened on a tap, the screen stays
+  awake while on channel, and every client mirrors its call diagnostics
+  into the server log for after-the-fact debugging.
 - **Grid ambience** — sitting on the lobby, synthesized chimes (and
   optional browser notifications) announce arrivals, new constructs, and
   patch-ins. An orientation deck (4-page help popup) glows until first
