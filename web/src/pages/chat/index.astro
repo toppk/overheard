@@ -48,6 +48,10 @@ import '../../styles/neon.css';
           <button class="cmd flow-toggle" id="deafen-btn">go deaf</button>
         </div>
       </div>
+      <div id="carrier-note" class="status-failed" style="display:none; margin-top:0.4rem;"></div>
+      <div id="blocked-note" class="status-failed" style="display:none; margin-top:0.4rem;">
+        ⚠ incoming audio is being held by this device — tap anywhere to open the channel
+      </div>
       <div class="narrative">the construct is taping every channel.</div>
       <h2>operators on channel</h2>
       <ul id="peers"></ul>
@@ -56,7 +60,7 @@ import '../../styles/neon.css';
       </div>
     </div>
 
-    <p id="grid-link"><a href="/">back to the grid</a></p>
+    <p id="grid-link"><a href="/">// the grid</a></p>
 
     <script>
       import { Call } from '../../lib/call';
@@ -150,6 +154,14 @@ import '../../styles/neon.css';
         onLevels: (txLevel, rxLevel) => {
           tx.draw(txLevel);
           rx.draw(rxLevel);
+        },
+        onCarrier: (problem) => {
+          const note = document.getElementById('carrier-note')!;
+          note.style.display = problem ? 'block' : 'none';
+          note.textContent = problem ?? '';
+        },
+        onAudioBlocked: (blocked) => {
+          document.getElementById('blocked-note')!.style.display = blocked ? 'block' : 'none';
         },
       });
 

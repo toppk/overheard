@@ -1,5 +1,5 @@
 import { Device } from 'mediasoup-client';
-import type { Transport } from 'mediasoup-client/types';
+import type { Transport, Producer, Consumer } from 'mediasoup-client/types';
 import { diag } from './diag';
 
 type Signal = (type: string, data?: Record<string, unknown>) => Promise<any>;
@@ -9,6 +9,10 @@ export interface CallEvents {
   onPeerListChanged: (peers: { peerId: string; name: string }[]) => void;
   /** Outgoing (mic) and incoming (room mix) levels in [0, 1], ~60x/s. */
   onLevels?: (tx: number, rx: number) => void;
+  /** Non-null when RTP has stopped flowing (the VU meter can't tell you this). */
+  onCarrier?: (problem: string | null) => void;
+  /** True while incoming audio is blocked by the browser awaiting a tap. */
+  onAudioBlocked?: (blocked: boolean) => void;
 }
 
 export class Call {
@@ -26,6 +30,20 @@ export class Call {
   private rxAnalyser: AnalyserNode | null = null;
   private rxSources = new Map<string, MediaStreamAudioSourceNode>();
   private levelRaf = 0;
+  private producer: Producer | null = null;
+  private consumersByPeer = new Map<string, Consumer>();
+  private blockedEls = new Set<HTMLAudioElement>();
+  private gestureArmed = false;
+  private carrierTimer = 0;
+  private lastTxBytes = 0;
+  private lastRxBytes = 0;
+  private txStalls = 0;
+  private rxStalls = 0;
+  private carrierMsg: string | null = null;
+  private wakeLock: { release(): Promise<void> } | null = null;
+  private onVisible = () => {
+    if (document.visibilityState === 'visible') void this.acquireWakeLock();
+  };
 
   constructor(events: CallEvents) {
     this.events = events;
@@ -62,7 +80,7 @@ export class Call {
     this.events.onStatus('publishing microphone…');
     const opusMaxAverageBitrate = joinInfo.audio?.opusMaxAverageBitrate ?? 96000;
     diag(`producing mic (opus maxAverageBitrate=${opusMaxAverageBitrate}, fec=on, dtx=off)`);
-    await this.sendTransport.produce({
+    this.producer = await this.sendTransport.produce({
       track: this.micTrack,
       codecOptions: {
         // Bitrate is deployment policy (OPUS_BITRATE env on the server).
@@ -83,6 +101,72 @@ export class Call {
     }
     this.emitPeers();
     this.events.onStatus('in call');
+    this.trace(`patched in as ${name}: transports up, ${joinInfo.peers.length} peer(s) consumed`);
+    this.startCarrierWatch();
+    void this.acquireWakeLock();
+    document.addEventListener('visibilitychange', this.onVisible);
+  }
+
+  /** diag() into the local console AND relay to the server log, so remote
+   *  devices (iPads have no reachable console) can be debugged after the fact. */
+  private trace(line: string): void {
+    diag(line);
+    try {
+      this.signal('trace', { line }).catch(() => {});
+    } catch {}
+  }
+
+  /** Keep the screen on while patched in: on iOS, screen lock suspends mic
+   *  capture and the room hears silence. Best-effort — not all browsers. */
+  private async acquireWakeLock(): Promise<void> {
+    const wl = (navigator as { wakeLock?: { request(type: string): Promise<any> } }).wakeLock;
+    if (!wl) return;
+    try {
+      this.wakeLock = await wl.request('screen');
+      this.trace('wake lock acquired: screen stays on while on channel');
+    } catch (err) {
+      this.trace(`wake lock refused: ${(err as Error)?.name}`);
+    }
+  }
+
+  /** The VU meter only proves the mic works locally. This proves packets:
+   *  if RTP byte counters stop advancing, surface it instead of letting a
+   *  lively TX meter suggest a working channel (UDP-hostile networks,
+   *  transient blackouts). Mute doesn't false-alarm — DTX is off, so a
+   *  muted mic still ships silence frames. */
+  private startCarrierWatch(): void {
+    this.carrierTimer = window.setInterval(async () => {
+      try {
+        let tx = 0;
+        if (this.producer && !this.producer.closed) {
+          for (const s of (await this.producer.getStats()).values() as Iterable<any>)
+            if (s.type === 'outbound-rtp') tx += s.bytesSent ?? 0;
+        }
+        let rx = 0;
+        for (const c of this.consumersByPeer.values())
+          for (const s of (await c.getStats()).values() as Iterable<any>)
+            if (s.type === 'inbound-rtp') rx += s.bytesReceived ?? 0;
+
+        this.txStalls = tx > this.lastTxBytes ? 0 : this.txStalls + 1;
+        this.rxStalls = this.consumersByPeer.size === 0 || rx > this.lastRxBytes ? 0 : this.rxStalls + 1;
+        this.lastTxBytes = tx;
+        this.lastRxBytes = rx;
+
+        const dead: string[] = [];
+        if (this.txStalls >= 2) dead.push('TX dead — your voice is NOT reaching the grid');
+        if (this.rxStalls >= 2) dead.push('RX dead — nothing is arriving from the grid');
+        const msg = dead.length
+          ? `NO CARRIER: ${dead.join('; ')}. (network likely eating UDP)`
+          : null;
+        if (msg !== this.carrierMsg) {
+          this.carrierMsg = msg;
+          this.events.onCarrier?.(msg);
+          this.trace(msg ? `carrier lost: ${msg}` : 'carrier restored: RTP flowing again');
+        }
+      } catch {
+        // getStats can fail transiently mid-teardown; skip the beat.
+      }
+    }, 3000);
   }
 
   get muted(): boolean {
@@ -151,6 +235,13 @@ export class Call {
     try {
       this.signal('leave');
     } catch {}
+    clearInterval(this.carrierTimer);
+    document.removeEventListener('visibilitychange', this.onVisible);
+    this.wakeLock?.release().catch(() => {});
+    this.wakeLock = null;
+    this.producer = null;
+    this.consumersByPeer.clear();
+    this.blockedEls.clear();
     cancelAnimationFrame(this.levelRaf);
     for (const src of this.rxSources.values()) src.disconnect();
     this.rxSources.clear();
@@ -206,16 +297,18 @@ export class Call {
       } else pending.resolve(msg.data);
       return;
     }
-    diag(`call event: ${msg.type}`, { peer: msg.name ?? msg.peerId });
+    this.trace(`call event: ${msg.type} (${msg.name ?? msg.peerId ?? ''})`);
     if (msg.type === 'peerJoined') {
       this.peers.set(msg.peerId, { name: msg.name });
       this.emitPeers();
     } else if (msg.type === 'peerLeft') {
       this.peers.delete(msg.peerId);
+      this.consumersByPeer.delete(msg.peerId);
       const el = this.audioEls.get(msg.peerId);
       if (el) {
         el.remove();
         this.audioEls.delete(msg.peerId);
+        this.blockedEls.delete(el);
       }
       const src = this.rxSources.get(msg.peerId);
       if (src) {
@@ -252,7 +345,7 @@ export class Call {
     // The VU meter only proves the mic works locally; this proves (or
     // disproves) that media is actually flowing to the server.
     transport.on('connectionstatechange', (state) => {
-      diag(`${direction} transport connection: ${state}`);
+      this.trace(`${direction} transport connection: ${state}`);
       if (direction === 'send') {
         if (state === 'connected') this.events.onStatus('on channel — carrier confirmed');
         else if (state === 'failed' || state === 'disconnected')
@@ -284,7 +377,8 @@ export class Call {
       rtpParameters: params.rtpParameters,
     });
     await this.signal('resumeConsumer', { consumerId: consumer.id });
-    diag(`consuming audio from peer ${peerId}`);
+    this.consumersByPeer.set(peerId, consumer);
+    this.trace(`consuming audio from peer ${peerId}`);
 
     const el = document.createElement('audio');
     el.autoplay = true;
@@ -293,13 +387,49 @@ export class Call {
     el.srcObject = stream;
     document.body.appendChild(el);
     this.audioEls.set(peerId, el);
-    // iOS Safari sometimes needs an explicit play() after a user gesture.
-    el.play().catch(() => {});
+    // Autoplay is only guaranteed near a user gesture. An element created
+    // long after the last tap (someone re-patching in) can be refused —
+    // iPad Safari especially. Never swallow that: hold the channel, tell
+    // the UI, and retry on the next tap anywhere.
+    el.play().then(
+      () => this.trace(`audio channel open from peer ${peerId}`),
+      (err) => {
+        this.trace(`audio play refused for peer ${peerId} (${(err as Error)?.name}) — held until next tap`);
+        this.blockedEls.add(el);
+        this.events.onAudioBlocked?.(true);
+        this.armGestureRetry();
+      },
+    );
     if (this.audioCtx && this.rxAnalyser) {
       const src = this.audioCtx.createMediaStreamSource(stream);
       src.connect(this.rxAnalyser);
       this.rxSources.set(peerId, src);
     }
+  }
+
+  private armGestureRetry(): void {
+    if (this.gestureArmed) return;
+    this.gestureArmed = true;
+    document.addEventListener(
+      'pointerdown',
+      () => {
+        this.gestureArmed = false;
+        const held = [...this.blockedEls];
+        this.blockedEls.clear();
+        for (const el of held) {
+          el.play().then(
+            () => this.trace('held audio channel opened by tap'),
+            () => this.blockedEls.add(el),
+          );
+        }
+        // Report once the retries settle; re-arm if any are still held.
+        setTimeout(() => {
+          if (this.blockedEls.size) this.armGestureRetry();
+          else this.events.onAudioBlocked?.(false);
+        }, 250);
+      },
+      { once: true },
+    );
   }
 
   private emitPeers(): void {

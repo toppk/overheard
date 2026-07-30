@@ -449,6 +449,10 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
         paused: true,
       });
       peer.consumers.set(consumer.id, consumer);
+      const owner = [...room.peers.values()].find((p) => p.producers.has(msg.producerId));
+      console.log(
+        `[room ${room.id}] ${peer.name} consumes ${owner?.name ?? 'unknown'} (producer ${String(msg.producerId).slice(0, 8)})`,
+      );
       return {
         consumerId: consumer.id,
         producerId: msg.producerId,
@@ -459,6 +463,15 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
 
     case 'clockPing': {
       return { serverTime: Date.now() };
+    }
+
+    case 'trace': {
+      // Client-side call diagnostics relayed into the server log. Remote
+      // devices (iPads especially) have no reachable console; this is how
+      // their side of a failure becomes visible after the fact.
+      const line = String(msg.line ?? '').replace(/\s+/g, ' ').slice(0, 400);
+      console.log(`[trace ${state.room?.id ?? '-'}/${state.peer?.name ?? '?'}] ${line}`);
+      return {};
     }
 
     case 'clockOffset': {
@@ -484,10 +497,11 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
     }
 
     case 'resumeConsumer': {
-      const { peer } = requireJoined(state);
+      const { room, peer } = requireJoined(state);
       const consumer = peer.consumers.get(msg.consumerId);
       if (!consumer) throw new Error('unknown consumer');
       await consumer.resume();
+      console.log(`[room ${room.id}] ${peer.name} resumed consumer ${String(msg.consumerId).slice(0, 8)}`);
       return {};
     }
 
