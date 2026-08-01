@@ -178,7 +178,9 @@ the agent feedback sessions that shaped this surface.
 Operators who must remove sensitive material should follow
 [`docs/archive-purge.md`](docs/archive-purge.md). Deleting only a room's
 recordings directory leaves its copied transcript and facets in the search
-index; a hard purge rebuilds that derived index as well.
+index; a hard purge rebuilds that derived index as well. The runbook also
+defines the remaining metadata traces and the limits of application-level
+purging.
 
 ## Development
 
