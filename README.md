@@ -175,6 +175,11 @@ The transcript markdown is a complete door: speech, stage directions,
 overlap marks, and links to the source audio. See `docs/agent-qa.md` for
 the agent feedback sessions that shaped this surface.
 
+Operators who must remove sensitive material should follow
+[`docs/archive-purge.md`](docs/archive-purge.md). Deleting only a room's
+recordings directory leaves its copied transcript and facets in the search
+index; a hard purge rebuilds that derived index as well.
+
 ## Development
 
 Requirements: Node.js >= 20, npm >= 11.10, ffmpeg (+ffprobe), Python 3,
@@ -251,7 +256,7 @@ web/             Astro frontend (built statically, served by the server)
                  the stacks (/storage)
 transcription/   offline faster-whisper pipeline + transcript compositor
 site/            GitHub Pages project page
-docs/            flow diagrams, agent QA record
+docs/            operations, flow diagrams, agent QA record
 recordings/      dev-mode audio + transcripts (gitignored)
 data/            dev-mode search index (gitignored)
 ```
