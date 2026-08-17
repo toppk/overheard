@@ -72,6 +72,9 @@ import '../../styles/neon.css';
 
       const joinCard = document.getElementById('join-card')!;
       const callCard = document.getElementById('call-card')!;
+      // Set when the line drops mid-call: the join button then means
+      // "reload and rejoin" rather than "join for the first time".
+      let lineDropped = false;
       const statusEl = document.getElementById('status')!;
       const status2El = document.getElementById('status2')!;
       const peersEl = document.getElementById('peers')!;
@@ -163,9 +166,42 @@ import '../../styles/neon.css';
         onAudioBlocked: (blocked) => {
           document.getElementById('blocked-note')!.style.display = blocked ? 'block' : 'none';
         },
+        onReconnecting: (attempt, max) => {
+          // Stay on the call screen: this is expected to succeed, and
+          // throwing the user back to a join form mid-recovery would make a
+          // survivable blip look like the end of the call.
+          diag(`reconnecting (${attempt}/${max})`);
+        },
+        onDisconnected: (reason) => {
+          // Automatic recovery gave up. Only now does the user need to act —
+          // without this the page sits on a dead in-call screen whose only
+          // exit is "drop the line".
+          diag(`reconnect gave up (${reason ?? 'unknown'}) — offering a way back in`);
+          lineDropped = true;
+          callCard.style.display = 'none';
+          joinCard.style.display = 'block';
+          document.getElementById('grid-link')!.style.display = '';
+          if (reason === 'sealed') {
+            statusEl.textContent = '';
+            const note = document.getElementById('sealed-note')!;
+            note.style.display = 'block';
+            (document.getElementById('sealed-link') as HTMLAnchorElement).href = `/archive/${roomId}`;
+          } else {
+            joinBtn.textContent = 'patch back in';
+            statusEl.textContent = 'could not get back on channel — patch back in to try again';
+          }
+        },
       });
 
       joinBtn.addEventListener('click', async () => {
+        // A dropped Call cannot be reused — its mediasoup Device is already
+        // loaded and its transports are dead — so the way back is a clean
+        // page, not a second join() on this instance.
+        if (lineDropped) {
+          diag('click: patch back in after a dropped line — reloading for a clean call');
+          location.reload();
+          return;
+        }
         const name = nameInput.value.trim();
         if (!name) {
           // Every voice on tape carries a name — handle or alias.
@@ -217,8 +253,24 @@ import '../../styles/neon.css';
         location.href = '/';
       });
 
+      // iOS Safari fires 'beforeunload' unreliably or not at all, so on an
+      // iPad closing the tab used to leave the server waiting for TCP to
+      // notice. 'pagehide' is the signal that actually fires there.
+      // leave() is idempotent, so both handlers can coexist for the
+      // browsers that only honour one of them.
       window.addEventListener('beforeunload', () => {
         diag('beforeunload: leaving call');
+        call.leave();
+      });
+      window.addEventListener('pagehide', (e) => {
+        // A persisted pagehide is the back/forward cache, not an unload:
+        // the page can be restored and the call reconnected. Leaving here
+        // would latch `leaving` and defeat the reconnect we just built.
+        if (e.persisted) {
+          diag('pagehide (bfcache) — not leaving; a restore can reconnect');
+          return;
+        }
+        diag('pagehide: leaving call');
         call.leave();
       });
     </script>

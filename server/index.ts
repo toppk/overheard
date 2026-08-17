@@ -382,7 +382,13 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       const peer = room.addPeer(randomUUID().slice(0, 8), name, ws);
       state.room = room;
       state.peer = peer;
-      console.log(`[room ${room.id}] ${name} joined as ${peer.id}`);
+      // Coarse platform (OS/browser/form factor, no fingerprint) recorded
+      // beside the participant id, so a later "only on iPadOS Safari"
+      // pattern is visible in the log instead of guessed at.
+      const platform = String(msg.platform ?? '').replace(/[^\w .·()\/-]/g, '').slice(0, 120);
+      console.log(
+        `[room ${room.id}] ${name} joined as ${peer.id}${platform ? ` — ${platform}` : ''}`,
+      );
       room.broadcast(peer.id, { type: 'peerJoined', peerId: peer.id, name });
       lobby.announce(
         existed
@@ -420,6 +426,22 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       if (!transport) throw new Error('unknown transport');
       await transport.connect({ dtlsParameters: msg.dtlsParameters });
       return {};
+    }
+
+    case 'restartIce': {
+      // New ufrag/pwd, so the client re-runs connectivity checks and lands
+      // on a fresh 5-tuple. That is the entire point: the old one has been
+      // blackholed by the network, and ICE never re-runs on its own once
+      // the initial handshake has succeeded. Keeps the room, the producer
+      // and the recording alive where a rejoin would restart all three.
+      const { room, peer } = requireJoined(state);
+      const transport = peer.transports.get(msg.transportId);
+      if (!transport) throw new Error('unknown transport');
+      const iceParameters = await transport.restartIce();
+      console.log(
+        `[room ${room.id}] ${peer.name} restarts ICE on transport ${String(msg.transportId).slice(0, 8)}`,
+      );
+      return { iceParameters };
     }
 
     case 'produce': {
@@ -465,6 +487,37 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
         kind: consumer.kind,
         rtpParameters: consumer.rtpParameters,
       };
+    }
+
+    case 'sync': {
+      // The room's current truth, in the same shape `join` returns it. A
+      // client that missed a newProducer broadcast has no way to notice on
+      // its own — this lets it re-derive and repair instead of rejoining.
+      const { room, peer } = requireJoined(state);
+      return {
+        peers: [...room.peers.values()]
+          .filter((p) => p.id !== peer.id)
+          .map((p) => ({
+            peerId: p.id,
+            name: p.name,
+            producerIds: [...p.producers.keys()],
+          })),
+      };
+    }
+
+    case 'away': {
+      // Sent from visibilitychange, the last moment a locking device can
+      // still talk to us. Purely advisory — an away peer is still in the
+      // room and still recording; this only stops the lobby from claiming
+      // they are actively on channel.
+      const { room, peer } = requireJoined(state);
+      const away = Boolean(msg.away);
+      if (peer.away !== away) {
+        peer.away = away;
+        console.log(`[room ${room.id}] ${peer.name} is ${away ? 'away (backgrounded)' : 'back'}`);
+        lobby.broadcastState();
+      }
+      return {};
     }
 
     case 'clockPing': {

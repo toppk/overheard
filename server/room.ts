@@ -93,6 +93,16 @@ export class Room {
     transport.on('dtlsstatechange', (state) =>
       console.log(`[transport ${peer.name}/${transport.id.slice(0, 8)}] dtls: ${state}`),
     );
+    // The selected tuple IS the 5-tuple a hostile network blackholes. Logging
+    // it turns "did the ICE restart actually get us a new path?" from a
+    // theory into something the log answers: a restart that recovers audio
+    // shows a new remote port here, one that doesn't shows the same one.
+    transport.on('iceselectedtuplechange', (tuple) =>
+      console.log(
+        `[transport ${peer.name}/${transport.id.slice(0, 8)}] tuple: ` +
+          `${tuple?.protocol} ${tuple?.remoteIp}:${tuple?.remotePort} -> :${tuple?.localPort}`,
+      ),
+    );
     peer.transports.set(transport.id, transport);
     return transport;
   }
