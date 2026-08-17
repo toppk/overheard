@@ -1,4 +1,4 @@
-// Relative timestamps, shared by the lobby and stacks pages.
+// Time formatting shared by the lobby and stacks pages.
 //
 // STYLE picks the representation; 'plain' is the setting for now.
 //  - plain:       "8h ago", "3d ago"           (rounded, detail dropped)
@@ -60,4 +60,11 @@ export function fmtAgo(iso: string): string {
   if (STYLE === 'fractions') return fractions(mins);
   if (STYLE === 'major-minor') return majorMinor(mins);
   return plain(mins);
+}
+
+// How long a construct ran, not how long ago — so no "ago", and no rounding
+// to zero for a room that only held a few seconds of tape.
+export function fmtDur(ms: number): string {
+  const m = Math.round(ms / 60000);
+  return m < 1 ? '<1 min' : `${m} min`;
 }

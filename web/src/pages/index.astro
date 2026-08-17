@@ -35,10 +35,10 @@ import HelpDeck from '../components/HelpDeck.astro';
       <ul id="users"><li class="narrative">…</li></ul>
 
       <h2>hot constructs</h2>
-      <ul id="rooms"><li class="narrative">…</li></ul>
+      <ul id="rooms" class="rows state-wide"><li class="narrative">…</li></ul>
 
       <h2>cold storage — last 24h</h2>
-      <ul id="archives" class="scrollpane"><li class="narrative">…</li></ul>
+      <ul id="archives" class="scrollpane rows"><li class="narrative">…</li></ul>
       <p class="narrative" id="storage-link" style="margin-top:0.3rem;"></p>
 
       <h2>grid traffic</h2>
@@ -57,13 +57,32 @@ import HelpDeck from '../components/HelpDeck.astro';
     <script>
       import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
       import { chime, primeChimes, type ChimeKind } from '../lib/chimes';
-      import { fmtAgo } from '../lib/ago';
+      import { fmtAgo, fmtDur } from '../lib/ago';
 
       diag('page load: / (the grid)', { referrer: document.referrer || '(none)' });
       const namePanel = document.getElementById('name-panel')!;
       const commons = document.getElementById('commons')!;
       const nameInput = document.getElementById('name-input') as HTMLInputElement;
       nameInput.value = getHandle() ?? '';
+
+      // Delegated once: the lists are re-rendered wholesale on every state
+      // broadcast, so per-row handlers would stack up.
+      for (const id of ['rooms', 'archives']) {
+        const list = document.getElementById(id)!;
+        // The class is what makes the rows look clickable, so it can never
+        // drift from the handler that makes them clickable.
+        list.classList.add('wired');
+        list.addEventListener('click', (ev) => {
+          const el = ev.target as HTMLElement;
+          if (el.closest('a')) return;
+          if (window.getSelection()?.toString()) return;
+          const link = el.closest('li')?.querySelector('a');
+          if (link) {
+            diag(`click: row activated -> ${link.getAttribute('href')}`);
+            location.href = link.href;
+          }
+        });
+      }
 
       function render(state: any) {
         // Operators don't vanish just because they're in a construct: merge
@@ -104,37 +123,75 @@ import HelpDeck from '../components/HelpDeck.astro';
           rooms.innerHTML = '<li class="narrative">the grid hums, empty. no constructs running.</li>';
         }
         for (const room of state.rooms) {
+          // Same two-line record as cold storage: name on the head line, then
+          // the action leading the line below so it sits in a fixed column
+          // however long the construct's name runs.
           const li = document.createElement('li');
-          // An empty room is being held open for a few seconds so whoever
-          // dropped can get back in. Saying "on channel" with nobody on it
-          // (which is what an empty participants.join() produced) is a lie
-          // that hides the one fact that matters: it is about to flatline.
+          li.className = 'record';
+          const head = document.createElement('div');
+          head.className = 'record-head';
           const empty = !room.participants.length;
-          // Three states, not two. Between the last voice vanishing and the
-          // hold starting, the room is empty with no deadline yet — showing
-          // "~0s" there was a countdown that hadn't begun, and it jumped
-          // back up to the full window once the tape finished closing.
-          const secs = room.sealsAt
-            ? Math.max(0, Math.round((room.sealsAt - Date.now()) / 1000))
-            : null;
-          // Someone whose device is locked or backgrounded is still in the
-          // room and still being taped, but calling them "on channel" is
-          // how the lobby ends up lying for the ~12s before TCP notices.
-          const awaySet = new Set(room.away ?? []);
-          const named = room.participants
-            .map((p) => (awaySet.has(p) ? `${p} <span class="narrative">(away)</span>` : p))
-            .join(', ');
-          const voices = !empty
-            ? `${named} on channel`
-            : secs !== null
-              ? `<span class="status-running">channel empty — flatlines in ~${secs}s</span>`
-              : `<span class="status-running">channel empty — closing the tape…</span>`;
-          li.innerHTML =
-            `<span class="${empty ? 'status-running' : 'status-live'}">${room.roomId}</span> — ${voices} `;
+          const name = document.createElement('span');
+          name.className = empty ? 'status-running' : 'status-live';
+          name.textContent = room.roomId;
+          head.appendChild(name);
+          head.append(' · ');
+          if (empty) {
+            // An empty room is held open for a few seconds so whoever dropped
+            // can get back in. Naming the emptiness here is what lets the line
+            // below say only the thing that matters: it is about to flatline.
+            const none = document.createElement('span');
+            none.className = 'narrative';
+            none.textContent = 'empty';
+            head.appendChild(none);
+          } else {
+            // Voices share the head line with the name: together they say
+            // which construct this is. Text nodes, not innerHTML: participant
+            // handles are operator-typed strings.
+            //
+            // Someone whose device is locked or backgrounded is still in the
+            // room and still being taped, but listing them unqualified is how
+            // the lobby ends up lying for the ~12s before TCP notices.
+            const awaySet = new Set(room.away ?? []);
+            room.participants.forEach((p, i) => {
+              if (i) head.append(', ');
+              head.append(p);
+              if (awaySet.has(p)) {
+                const away = document.createElement('span');
+                away.className = 'narrative';
+                away.textContent = ' (away)';
+                head.appendChild(away);
+              }
+            });
+          }
+          li.appendChild(head);
+
+          const meta = document.createElement('div');
+          meta.className = 'record-meta';
+          const state = document.createElement('span');
+          state.className = 'col col-state';
+          if (empty) {
+            // Three states, not two. Between the last voice vanishing and the
+            // hold starting, the room is empty with no deadline yet — showing
+            // "~0s" there was a countdown that hadn't begun, and it jumped
+            // back up to the full window once the tape finished closing.
+            const secs = room.sealsAt
+              ? Math.max(0, Math.round((room.sealsAt - Date.now()) / 1000))
+              : null;
+            state.classList.add('status-running');
+            state.textContent = secs !== null
+              ? `flatlines in ~${secs}s`
+              : 'closing the tape…';
+          } else {
+            state.textContent = 'recording';
+          }
+          meta.appendChild(state);
           const a = document.createElement('a');
+          a.className = 'act';
           a.href = `/chat/${room.roomId}`;
           a.textContent = empty ? 'patch back in' : 'patch in';
-          li.appendChild(a);
+          meta.appendChild(a);
+          li.appendChild(meta);
           rooms.appendChild(li);
         }
 
@@ -154,30 +211,30 @@ import HelpDeck from '../components/HelpDeck.astro';
           name.className = 'status-sealed';
           name.textContent = ar.roomId;
           head.appendChild(name);
-          const a = document.createElement('a');
-          a.href = `/archive/${ar.roomId}`;
-          a.textContent = 'access';
-          head.appendChild(a);
+          // Name and voices both identify the recording, so they share the
+          // head line. Appended as a text node, not innerHTML: participant
+          // handles are operator-typed strings.
+          head.append(` · ${ar.participants.length ? ar.participants.join(', ') : 'no one spoke'}`);
           li.appendChild(head);
-          // Built from text nodes, not innerHTML: participant handles are
-          // operator-typed strings.
-          const who = ar.participants.length ? ar.participants.join(', ') : 'no one spoke';
+
+          // Nothing operator-typed left on this line, so it can be built as
+          // markup. Same field order as the stacks, so the views read alike.
           const meta = document.createElement('div');
           meta.className = 'record-meta';
-          meta.append(`${who} · flatlined ${fmtAgo(ar.endedAt)} · `);
-          if (ar.transcript === 'running') {
-            const s = document.createElement('span');
-            s.className = 'status-running';
-            s.textContent = 'wintermute parsing…';
-            meta.appendChild(s);
-          } else if (ar.transcript === 'failed') {
-            const s = document.createElement('span');
-            s.className = 'status-failed';
-            s.textContent = 'parse failed';
-            meta.appendChild(s);
-          } else {
-            meta.append(ar.transcript === 'done' ? 'parsed' : 'unparsed');
-          }
+          const state =
+            ar.transcript === 'running' ? '<span class="status-running">wintermute parsing…</span>'
+            : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
+            : ar.transcript === 'done' ? 'parsed'
+            : 'unparsed';
+          meta.innerHTML =
+            `flatlined <span class="col col-ago">${fmtAgo(ar.endedAt)}</span>` +
+            ` · <span class="col col-dur">${fmtDur(ar.durationMs)}</span>` +
+            ` · <span class="col col-state">${state}</span>`;
+          const a = document.createElement('a');
+          a.className = 'act';
+          a.href = `/archive/${ar.roomId}`;
+          a.textContent = 'access';
+          meta.appendChild(a);
           li.appendChild(meta);
           archives.appendChild(li);
         }

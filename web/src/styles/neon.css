@@ -8,6 +8,17 @@
   --magenta: #e94fa1;
   --amber: #e0af68;
   --red: #f7566e;
+
+  /* Tier is ranked at rest only; every control shares one loud lit state, so
+     activation gets the whole range instead of a rung. A row action can afford
+     to be this quiet because its column, not its brightness, is what finds it. */
+  --act: #6ba7b3;
+  --cmd: var(--cyan);
+  --lit: #d5fdfd;
+  --red-lit: #ffa8b8;
+  /* Quiet but legible: brackets at rest, and anything inactive. --dim is
+     chrome, too faint to find or to read. */
+  --off: #5f7e8c;
 }
 
 * { box-sizing: border-box; }
@@ -73,7 +84,15 @@ h2::before { content: '▚ '; color: var(--dim); text-shadow: none; }
 }
 
 a, .cmd {
-  color: var(--cyan);
+  /* A control is a trio: label, halo, brackets. Tier picks the resting trio,
+     the lit rules below swap all three at once. */
+  --ink: var(--cmd);
+  --halo: 0 0 6px rgba(75, 228, 228, 0.22);
+  --bracket: var(--off);
+  color: var(--ink);
+  /* Neon reads as lit, not just coloured — the halo is what carries state. */
+  text-shadow: var(--halo);
+  transition: color 110ms linear, text-shadow 110ms linear;
   text-decoration: none;
   cursor: pointer;
   background: none;
@@ -84,14 +103,71 @@ a, .cmd {
      them off their label. */
   white-space: nowrap;
 }
-a::before, .cmd::before { content: '< '; color: var(--dim); }
-a::after, .cmd::after { content: ' >'; color: var(--dim); }
-a:hover, .cmd:hover {
-  color: var(--magenta);
-  text-shadow: 0 0 10px rgba(233, 79, 161, 0.5);
+/* Brackets are chrome: they sit under their label and climb toward it,
+   never past it. */
+a::before, .cmd::before { content: '< '; color: var(--bracket); }
+a::after, .cmd::after { content: ' >'; color: var(--bracket); }
+
+/* The two tiers differ on two channels at rest, not one: a command is lit
+   hardware, a row action is an unlit hit target 1.7x quieter. The halo is the
+   tier marker, which is why this one has none until you touch it. */
+.act { --ink: var(--act); --halo: none; }
+
+/* Lit: one state for every tier, and it is loud. Label, brackets and halo all
+   jump at once — 1.4x to 2.8x each, where a 1.2x step read as nothing.
+   Focus counts everywhere; hover only where a pointer can really hover,
+   because iPadOS leaves :hover latched on whatever was tapped last. */
+a:focus-visible, .cmd:focus-visible, .act:focus-visible {
+  --ink: var(--lit);
+  --halo: 0 0 18px rgba(75, 228, 228, 0.7);
+  --bracket: var(--cyan);
 }
-.cmd.danger { color: var(--red); }
-.cmd.danger:hover { text-shadow: 0 0 10px rgba(247, 86, 110, 0.6); }
+@media (hover: hover) {
+  /* Row-hover lights the action only where the row itself is the target. */
+  a:hover, .cmd:hover, .act:hover, ul.wired > li:hover .act {
+    --ink: var(--lit);
+    --halo: 0 0 18px rgba(75, 228, 228, 0.7);
+    --bracket: var(--cyan);
+  }
+  ul.rows > li:has(a):hover { background: rgba(75, 228, 228, 0.05); }
+}
+
+/* A focus ring, because a colour shift alone is not an indicator. One hue for
+   the whole page: this marks the keyboard's position, not a tier. */
+a:focus-visible, .cmd:focus-visible, .toggle:focus-visible {
+  outline: 1px solid var(--cmd);
+  outline-offset: 2px;
+}
+
+/* The verb labels the row, but the whole row is the hit target. The inset
+   lives on the list, not the row: a negative margin on a row inside a
+   .scrollpane draws its hover band outside the clip. */
+ul.rows { margin-left: -0.3rem; }
+ul.rows > li { padding: 0.3rem; }
+/* Promise a click only where one is wired — the list marks itself. */
+ul.wired > li:has(a) { cursor: pointer; }
+
+/* danger sits outside both axes: a destructive control is never quiet, and
+   its brackets stay as loud as its label. Declared after the lit rules so
+   red survives hover and focus. */
+.cmd.danger {
+  --ink: var(--red);
+  --halo: 0 0 6px rgba(247, 86, 110, 0.3);
+  --bracket: var(--red);
+}
+.cmd.danger:focus-visible {
+  --ink: var(--red-lit);
+  --halo: 0 0 16px rgba(247, 86, 110, 0.7);
+  --bracket: var(--red-lit);
+  outline-color: var(--red);
+}
+@media (hover: hover) {
+  .cmd.danger:hover {
+    --ink: var(--red-lit);
+    --halo: 0 0 16px rgba(247, 86, 110, 0.7);
+    --bracket: var(--red-lit);
+  }
+}
 
 input {
   background: #060a0e;
@@ -128,7 +204,10 @@ li::before { content: '▸ '; color: var(--dim); }
   padding: 0.15rem 0.6rem;
   cursor: pointer;
 }
-.toggle:hover { border-color: var(--cyan); color: var(--text); }
+/* Gated: a latched :hover on a filter reads as half-selected. */
+@media (hover: hover) {
+  .toggle:hover { border-color: var(--cyan); color: var(--text); }
+}
 .toggle.on {
   color: var(--cyan);
   border-color: var(--cyan);
@@ -252,12 +331,17 @@ pre.transcript {
   border: 1px solid transparent;
   background: linear-gradient(to right, rgba(75, 228, 228, 0.16) var(--section-progress), transparent var(--section-progress));
 }
+/* The section you're reading is the lit state of the same control. */
 .archive-nav a.is-active {
-  color: var(--cyan);
+  color: var(--lit);
+  text-shadow: 0 0 18px rgba(75, 228, 228, 0.7);
   border-color: var(--border);
 }
+.archive-nav a.is-active::before, .archive-nav a.is-active::after { color: var(--cyan); }
+/* A channel that isn't there must not look lit, but must still be readable. */
 .archive-nav a.is-unavailable {
-  color: var(--dim);
+  color: var(--off);
+  text-shadow: none;
   pointer-events: none;
 }
 /* Section jumps act here; the trailing place link leaves — push it to
@@ -270,19 +354,26 @@ pre.transcript {
 
 audio { width: 100%; margin: 0.3rem 0; filter: invert(0.85) hue-rotate(150deg); }
 
-/* Two-line archive records: name + access on the head line, dim indented
-   metadata on its own line. Structure does the grouping — deterministic
-   shape at any width, no zebra striping needed. */
-.record { padding: 0.3rem 0.3rem 0.35rem; }
-.record:hover { background: rgba(75, 228, 228, 0.05); }
+/* Two-line records, used by both constructs and archives: name + action on
+   the head line, metadata indented on its own. Structure does the grouping —
+   deterministic shape at any width, no zebra striping needed. */
+/* Row padding and hover live with the row rules above, so a record looks
+   the same in the lobby and in the stacks. */
 /* The li ▸ prefix would sit alone on a line above block children; draw
    it inline at the start of the head line instead. */
 .record::before { content: none; }
 .record-head > :first-child::before { content: '▸ '; color: var(--dim); }
-.record-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-}
+/* Line two carries what varies and ends with the action. The fields are fixed
+   monospace columns, so the action lands in the same place row to row while
+   still sitting right next to the status it follows. */
 .record-meta { margin-left: 1.2rem; }
+/* Wide enough to still read as a gap when a long state overruns its column
+   and the column padding disappears. */
+.record-meta > a { margin-left: 1.4rem; }
+/* min-width, not width: a rare overlong value pushes the action right instead
+   of being clipped, and every ordinary row still lines up. */
+.col { display: inline-block; }
+.col-ago, .col-dur { min-width: 8ch; text-align: right; }
+.col-state { min-width: var(--state-w, 12ch); }
+/* A construct's state runs longer than a transcript's. */
+.state-wide { --state-w: 18ch; }
