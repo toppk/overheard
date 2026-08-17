@@ -16,6 +16,10 @@ export interface Peer {
   recordings: TrackRecording[];
   /** serverClock - clientClock, measured by the client at join. */
   clockOffsetMs?: number;
+  /** The client told us it was being backgrounded (screen lock, app switch)
+   *  on its way out. Reported so the lobby stops claiming they are on
+   *  channel during the ~12s it takes TCP to notice a locked device. */
+  away?: boolean;
 }
 
 export interface RoomEvent {
@@ -183,9 +187,33 @@ export class Room {
   }
 }
 
+/** How long a room stays alive after its last peer disappears.
+ *
+ *  Sealing is permanent, so doing it the instant a socket drops means a
+ *  screen lock, a tunnel, or one bad moment ends the meeting for good.
+ *  Observed on iPadOS (ken, 2026-08-07): locking the screen suspended the
+ *  page, the websocket died ~10s later, and the construct flatlined into
+ *  cold storage while its only participant was still holding the device —
+ *  unlocking left nothing to rejoin.
+ *
+ *  Deliberately short (ken, 2026-08-07): long enough to survive a lock or a
+ *  dropped socket, short enough that an abandoned construct doesn't sit in
+ *  the hot list pretending to be a meeting. The client reconnects on its
+ *  own now, so this window only has to outlast that ladder (~15s worst
+ *  case), not a human noticing and tapping. */
+const EMPTY_ROOM_LINGER_MS = Number(process.env.ROOM_LINGER_MS ?? 30_000);
+
 export class RoomManager {
   private worker!: mediasoup.types.Worker;
   private rooms = new Map<string, Room>();
+  private lingerTimers = new Map<string, { timer: NodeJS.Timeout; sealsAt: number }>();
+  private sealedHandler: ((room: Room) => void) | null = null;
+
+  /** Sealing is now deferred, so the caller can't learn about it from a
+   *  return value — it happens here instead. */
+  onSealed(handler: (room: Room) => void): void {
+    this.sealedHandler = handler;
+  }
 
   async init(): Promise<void> {
     this.worker = await mediasoup.createWorker({
@@ -198,11 +226,33 @@ export class RoomManager {
     });
   }
 
-  listLive(): { roomId: string; participants: string[]; startedAt: number }[] {
+  listLive(): {
+    roomId: string;
+    participants: string[];
+    startedAt: number;
+    /** Epoch ms at which an empty-but-held room seals, else null. Lets the
+     *  lobby say "empty, flatlines in ~Ns" instead of claiming someone is
+     *  still on channel when the participant list has gone empty. */
+    sealsAt: number | null;
+    /** True between "the last peer vanished" and "their tape is closed and
+     *  the hold has started". A leaver is removed from `peers` immediately
+     *  but their recording can take seconds to finalize (ffmpeg's exit, up
+     *  to the SIGKILL backstop), and the same socket death broadcasts lobby
+     *  state right inside that gap. Without this the lobby saw empty
+     *  participants with no deadline yet and rendered "flatlines in ~0s" —
+     *  a countdown that had not started, which then jumped back up to the
+     *  full window a moment later. */
+    finalizing: boolean;
+    /** Subset of participants whose device told us it was backgrounded. */
+    away: string[];
+  }[] {
     return [...this.rooms.values()].map((room) => ({
       roomId: room.id,
       participants: [...room.peers.values()].map((p) => p.name),
+      away: [...room.peers.values()].filter((p) => p.away).map((p) => p.name),
       startedAt: room.startedAt,
+      sealsAt: this.lingerTimers.get(room.id)?.sealsAt ?? null,
+      finalizing: room.peers.size === 0 && !this.lingerTimers.has(room.id),
     }));
   }
 
@@ -212,6 +262,14 @@ export class RoomManager {
 
   async getOrCreateRoom(roomId: string): Promise<Room> {
     let room = this.rooms.get(roomId);
+    // Someone came back inside the linger window: cancel the pending seal
+    // and let them straight back into the same construct.
+    const pending = this.lingerTimers.get(roomId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this.lingerTimers.delete(roomId);
+      console.log(`[room ${roomId}] rejoined while empty — hold released, not sealing`);
+    }
     if (!room && isSealed(roomId)) {
       throw new Error('sealed');
     }
@@ -224,11 +282,30 @@ export class RoomManager {
     return room;
   }
 
-  async closeRoomIfEmpty(room: Room): Promise<boolean> {
+  /** Called when a peer leaves. Returns true if that emptied the room and it
+   *  is now being held open; the actual seal fires later via onSealed(). */
+  holdOpenIfEmpty(room: Room): boolean {
     if (!room.isEmpty || !this.rooms.has(room.id)) return false;
-    this.rooms.delete(room.id);
-    room.close();
-    console.log(`[room ${room.id}] closed`);
+    if (this.lingerTimers.has(room.id)) return true;
+    // NOTHING is written to disk during the hold. `isSealed()` is defined as
+    // "metadata.json exists", so writing it early would mark the room sealed
+    // forever while it is still hot and rejoinable — the two states must not
+    // overlap. The tracks are already on disk (recordings stop on leave); a
+    // crash inside this window loses only the metadata, and the window is
+    // seconds.
+    const sealsAt = Date.now() + EMPTY_ROOM_LINGER_MS;
+    const timer = setTimeout(() => {
+      this.lingerTimers.delete(room.id);
+      if (!room.isEmpty || !this.rooms.has(room.id)) return;
+      this.rooms.delete(room.id);
+      room.close();
+      console.log(`[room ${room.id}] closed`);
+      this.sealedHandler?.(room);
+    }, EMPTY_ROOM_LINGER_MS);
+    this.lingerTimers.set(room.id, { timer, sealsAt });
+    console.log(
+      `[room ${room.id}] empty — holding the channel open for ${Math.round(EMPTY_ROOM_LINGER_MS / 1000)}s before sealing`,
+    );
     return true;
   }
 }

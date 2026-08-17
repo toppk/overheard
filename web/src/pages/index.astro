@@ -105,13 +105,35 @@ import HelpDeck from '../components/HelpDeck.astro';
         }
         for (const room of state.rooms) {
           const li = document.createElement('li');
-          const voices = room.participants.length === 1
-            ? `${room.participants[0]} on channel`
-            : `${room.participants.join(', ')} on channel`;
-          li.innerHTML = `<span class="status-live">${room.roomId}</span> — ${voices} `;
+          // An empty room is being held open for a few seconds so whoever
+          // dropped can get back in. Saying "on channel" with nobody on it
+          // (which is what an empty participants.join() produced) is a lie
+          // that hides the one fact that matters: it is about to flatline.
+          const empty = !room.participants.length;
+          // Three states, not two. Between the last voice vanishing and the
+          // hold starting, the room is empty with no deadline yet — showing
+          // "~0s" there was a countdown that hadn't begun, and it jumped
+          // back up to the full window once the tape finished closing.
+          const secs = room.sealsAt
+            ? Math.max(0, Math.round((room.sealsAt - Date.now()) / 1000))
+            : null;
+          // Someone whose device is locked or backgrounded is still in the
+          // room and still being taped, but calling them "on channel" is
+          // how the lobby ends up lying for the ~12s before TCP notices.
+          const awaySet = new Set(room.away ?? []);
+          const named = room.participants
+            .map((p) => (awaySet.has(p) ? `${p} <span class="narrative">(away)</span>` : p))
+            .join(', ');
+          const voices = !empty
+            ? `${named} on channel`
+            : secs !== null
+              ? `<span class="status-running">channel empty — flatlines in ~${secs}s</span>`
+              : `<span class="status-running">channel empty — closing the tape…</span>`;
+          li.innerHTML =
+            `<span class="${empty ? 'status-running' : 'status-live'}">${room.roomId}</span> — ${voices} `;
           const a = document.createElement('a');
           a.href = `/chat/${room.roomId}`;
-          a.textContent = 'patch in';
+          a.textContent = empty ? 'patch back in' : 'patch in';
           li.appendChild(a);
           rooms.appendChild(li);
         }

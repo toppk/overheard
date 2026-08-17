@@ -353,14 +353,15 @@ async function leaveRoom(state: SessionState): Promise<void> {
   await room.removePeer(peer.id);
   room.broadcast(null, { type: 'peerLeft', peerId: peer.id, name: peer.name });
   console.log(`[room ${room.id}] ${peer.name} left (${room.peers.size} remaining)`);
-  const sealed = await roomManager.closeRoomIfEmpty(room);
-  if (sealed) {
-    await upsertArchive(room.id);
-    lobby.announce(`The last channel closes; construct ${room.id} flatlines into cold storage.`);
-    if (room.finishedRecordings.length > 0) startScribe(room.id);
-  } else {
-    lobby.announce(`${peer.name} drops the line from ${room.id}.`);
-  }
+  // Emptying a room no longer seals it on the spot — it is held open for a
+  // short while so a screen lock or a dropped socket doesn't end the meeting
+  // permanently. The seal, when it comes, arrives via onSealed below.
+  const holding = roomManager.holdOpenIfEmpty(room);
+  lobby.announce(
+    holding
+      ? `${peer.name} drops the line; ${room.id} holds the channel open a moment longer.`
+      : `${peer.name} drops the line from ${room.id}.`,
+  );
 }
 
 async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Promise<unknown> {
@@ -531,6 +532,16 @@ function requireJoined(state: SessionState): { room: Room; peer: Peer } {
 }
 
 await roomManager.init();
+// Sealing happens after the hold-open window, not when the last peer leaves.
+roomManager.onSealed((room) => {
+  void upsertArchive(room.id).then(() => {
+    lobby.announce(`The last channel closes; construct ${room.id} flatlines into cold storage.`);
+    // Count only tracks that actually captured media: a room whose every
+    // participant failed to send has recordings but no tape, and summoning
+    // the scribe for it only loads a whisper model to transcribe silence.
+    if (room.finishedRecordings.some((rec) => rec.capturedMedia)) startScribe(room.id);
+  });
+});
 await initDb();
 server.listen(config.httpPort, () => {
   const proto = server instanceof https.Server ? 'https' : 'http';
