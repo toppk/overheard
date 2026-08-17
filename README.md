@@ -166,7 +166,9 @@ Outputs in `recordings/<room-id>/transcripts/`:
   numeric params are a 400, never a silent no-filter.
 - `GET /api/archives/{room-id}` — full JSON: metadata (tracks, events),
   transcript status (`none | running | done | failed`), rendered
-  conversation.
+  conversation. `tracks` counts only channels that captured audio: someone
+  whose voice never reached the server appears in `events` with a join and
+  a leave but no track.
 - `GET /api/storage/facets` — participant handles with room counts.
 - `GET /recordings/{room-id}/…` — raw per-speaker Ogg/Opus (each
   transcript's "raw channels" section links these).

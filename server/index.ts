@@ -186,6 +186,11 @@ instance. Terminology: rooms are "constructs"; a finished room is
   /api/archives until done after a room ends (~seconds to minutes).
 - participant_id values are PER-ROOM, not stable identities. Display
   names/aliases are self-claimed. There is no identity system yet.
+- tracks[] lists only channels that actually captured audio. Someone whose
+  audio never reached the server (a dead network path, a microphone held
+  by another app) appears in events[] with a join and a leave but no
+  track, and taped_channels will not count them. Rooms where this happened
+  to everyone seal with an empty tracks[] and no transcript.
 - Transcript format: "**name**" speaker headers, "(mm:ss) text" utterances,
   "*[ name action — mm:ss ]*" stage directions, "*[overlapping]*" marks
   genuine simultaneous speech.

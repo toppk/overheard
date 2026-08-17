@@ -145,11 +145,18 @@ export class Room {
   writeMetadata(): void {
     const dir = path.join(config.recordingsDir, this.id);
     fs.mkdirSync(dir, { recursive: true });
+    // A track that captured zero RTP is a bare ogg header, not a recording.
+    // Listing it made the archive claim "N taped channel(s)" and render a
+    // player for silence, and made transcribe.py load a whisper model only
+    // to die with EOFError. The participant is not erased — their join and
+    // leave are still in events[]; there is simply no tape of them.
+    const taped = this.finishedRecordings.filter((rec) => rec.capturedMedia);
+    const untaped = this.finishedRecordings.length - taped.length;
     const metadata = {
       room_id: this.id,
       started_at: new Date(this.startedAt).toISOString(),
       ended_at: new Date().toISOString(),
-      tracks: this.finishedRecordings.map((rec) => ({
+      tracks: taped.map((rec) => ({
         participant_id: rec.participantId,
         display_name: rec.displayName,
         file: rec.file,
@@ -162,7 +169,10 @@ export class Room {
       events: this.events,
     };
     fs.writeFileSync(path.join(dir, 'metadata.json'), JSON.stringify(metadata, null, 2));
-    console.log(`[room ${this.id}] wrote metadata for ${metadata.tracks.length} track(s)`);
+    console.log(
+      `[room ${this.id}] wrote metadata for ${metadata.tracks.length} track(s)` +
+        (untaped ? ` (${untaped} excluded: no media captured)` : ''),
+    );
   }
 
   close(): void {

@@ -21,6 +21,11 @@ export interface TrackRecording {
   roomTimeEndMs?: number;
   /** RTP-clock anchoring detail, for provenance and reprocessing. */
   rtp?: { clockRate: number; timestampStart: number; anchorMethod: string };
+  /** False when not one RTP packet ever arrived: the .ogg is a bare header
+   *  and the participant was, as far as the tape is concerned, never here.
+   *  Set at stop(); room.writeMetadata() keeps such tracks out of
+   *  metadata.json entirely (see the comment there). */
+  capturedMedia: boolean;
   stop: () => Promise<void>;
 }
 
@@ -39,9 +44,13 @@ function createTimingRelay(relaySocket: dgram.Socket, ffmpegRtpPort: number) {
     anchorWallclockMs: Infinity,
     lastRtpElapsedMs: 0,
     samples: 0,
+    /** Every RTP packet seen, not just the 500 the anchor samples. Zero here
+     *  is the ground truth for "this participant's audio never reached us". */
+    packets: 0,
   };
   relaySocket.on('message', (buf) => {
     if (buf.length >= 12 && buf[0] >> 6 === 2) {
+      state.packets++;
       const ts = buf.readUInt32BE(4);
       if (state.rtpTimestampStart === null) state.rtpTimestampStart = ts;
       // 32-bit wrap-safe delta; ignore pre-start reordered packets.
@@ -172,9 +181,11 @@ export async function recordProducer(opts: {
     displayName,
     file: path.relative(path.join(config.recordingsDir, roomId), oggFile),
     roomTimeStartMs: mediaStartMs,
+    capturedMedia: false,
     stop: async () => {
       if (stopped) return;
       stopped = true;
+      recording.capturedMedia = timing.packets > 0;
       // Prefer the packet-derived anchor: it maps the file's t=0 onto the
       // server clock to within one-way jitter, instead of ~half a second
       // of pipeline-startup guesswork.
@@ -211,7 +222,19 @@ export async function recordProducer(opts: {
         });
       });
       fs.rmSync(sdpFile, { force: true });
-      console.log(`[rec] recording finalized for ${displayName} (${participantId})`);
+      if (recording.capturedMedia) {
+        console.log(
+          `[rec] recording finalized for ${displayName} (${participantId}); ${timing.packets} packet(s)`,
+        );
+      } else {
+        // ffmpeg's exit code is not usable as this signal: the same
+        // no-packets-ever condition exits 255 or 0 depending on how the
+        // read timed out. The relay's packet count is unambiguous.
+        console.log(
+          `[rec] NO MEDIA for ${displayName} (${participantId}): not one RTP packet arrived — ` +
+            `their audio never reached the server. Track excluded from metadata; ${oggFile} kept as evidence.`,
+        );
+      }
     },
   };
   return recording;
