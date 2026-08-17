@@ -475,7 +475,12 @@ async function handleRequest(ws: WebSocket, state: SessionState, msg: any): Prom
       // devices (iPads especially) have no reachable console; this is how
       // their side of a failure becomes visible after the fact.
       const line = String(msg.line ?? '').replace(/\s+/g, ' ').slice(0, 400);
-      console.log(`[trace ${state.room?.id ?? '-'}/${state.peer?.name ?? '?'}] ${line}`);
+      // Fall back to the client's own labels: a trace sent mid-reconnect has
+      // no peer on this socket yet, and "[trace -/?]" helps nobody.
+      const label = (v: unknown) => String(v ?? '').replace(/[^\w .-]/g, '').slice(0, 64);
+      const where = state.room?.id ?? label(msg.room) ?? '';
+      const who = state.peer?.name ?? label(msg.name) ?? '';
+      console.log(`[trace ${where || '-'}/${who || '?'}] ${line}`);
       return {};
     }
 

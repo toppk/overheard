@@ -158,9 +158,22 @@ export async function recordProducer(opts: {
     ],
     { stdio: ['ignore', 'ignore', 'pipe'] },
   );
+  // Benign jitter chatter was 76% of all log volume across six real meetings;
+  // counted and reported once at finalize instead of line by line.
+  const JITTER = /max delay reached|RTP: missed \d+ packets/;
+  let jitterEvents = 0;
   ffmpeg.stderr?.on('data', (d: Buffer) => {
-    const line = d.toString().trim();
-    if (line) console.log(`[ffmpeg ${participantId}] ${line}`);
+    // Split: a multi-line chunk used to be logged as one entry, so every
+    // continuation line lost its [ffmpeg <id>] prefix and its attribution.
+    for (const raw of d.toString().split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (JITTER.test(line)) {
+        jitterEvents++;
+        continue;
+      }
+      console.log(`[ffmpeg ${participantId}] ${line}`);
+    }
   });
   ffmpeg.on('exit', (code, signal) => {
     console.log(`[ffmpeg ${participantId}] exited code=${code} signal=${signal}`);
@@ -224,7 +237,8 @@ export async function recordProducer(opts: {
       fs.rmSync(sdpFile, { force: true });
       if (recording.capturedMedia) {
         console.log(
-          `[rec] recording finalized for ${displayName} (${participantId}); ${timing.packets} packet(s)`,
+          `[rec] recording finalized for ${displayName} (${participantId}); ` +
+            `${timing.packets} packet(s), ${jitterEvents} jitter event(s)`,
         );
       } else {
         // ffmpeg's exit code is not usable as this signal: the same
