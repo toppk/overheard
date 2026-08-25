@@ -26,9 +26,15 @@ podman container under a systemd **user** unit.
 
 - unit: `container-overheard` — `systemctl --user status container-overheard`
 - image: `localhost/overheard:dev`, built from this working tree
-- state: a `/data` bind mount that lives **outside the repo**, so image
-  rebuilds never touch recordings/certs/config. `podman inspect overheard`
-  shows the mount source and env when you need them.
+- config: a **read-only** `/conf` bind mount — `certs/` plus
+  `overheard.env`, which is also the unit's `--env-file`. That file sets
+  `CERTS_DIR=/conf/certs`, overriding the image default of `/data/certs`.
+- state: a `/data` bind mount — recordings, search index, model cache.
+
+  Both live **outside the repo**, so image rebuilds never touch either, and
+  the split keeps what you author separate from what the app owns. A new
+  cert is a file drop plus a restart; no rebuild. `podman inspect overheard`
+  shows the mount sources and env when you need them.
 
 Redeploy after a change:
 
