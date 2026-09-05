@@ -1,5 +1,6 @@
 ---
 import '../styles/neon.css';
+import '../styles/lobby.css';
 import HelpDeck from '../components/HelpDeck.astro';
 ---
 <html lang="en">
@@ -8,51 +9,73 @@ import HelpDeck from '../components/HelpDeck.astro';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>overheard // the grid</title>
   </head>
-  <body>
+  <body class="lobby">
+    <header class="grid-header">
     <h1>overheard // the grid</h1>
+    <p class="grid-intro">Live voices. Recorded conversations. An open channel.</p>
+    <details class="grid-fiction">
+    <summary>Everyone sees everything; nothing is forgotten.</summary>
     <p class="narrative">
       The sky above the port is the color of a dead channel. You jack in.
       Constructs hang in the grid like lit windows — some hot with voices,
       some flatlined into cold storage, every word they ever held preserved.
       There is no ICE here. Everyone sees everything; nothing is forgotten.
     </p>
+    </details>
+    </header>
 
     <div class="panel" id="name-panel">
-      <div>handle, operator?</div>
-      <div style="margin-top:0.5rem; display:flex; gap:0.6rem;">
+      <label for="name-input">handle, operator?</label>
+      <div class="entry-controls">
         <input id="name-input" placeholder="your handle" autocomplete="name" />
         <button class="cmd" id="enter-btn">jack in</button>
       </div>
     </div>
 
     <div id="commons" style="display:none;">
-      <div class="panel">
-        <button class="cmd" id="dig-btn">spin up a construct</button>
-        <span class="narrative" id="dig-hint"></span>
+      <div id="carrier" class="carrier" role="status" hidden></div>
+      <div class="lobby-layout">
+      <main>
+      <section aria-labelledby="hot-heading">
+      <div class="section-heading">
+        <div><h2 id="hot-heading">hot constructs <span id="room-count" class="count"></span></h2>
+        <p class="section-note">Find a voice room. Patch in and talk.</p></div>
+        <button class="cmd primary" id="dig-btn">spin up a construct</button>
       </div>
+      <p id="dig-hint" role="status" hidden></p>
+      <ul id="rooms" class="room-list"><li class="empty-state">tuning into the grid…</li></ul>
+      </section>
 
-      <h2>operators online</h2>
-      <ul id="users"><li class="narrative">…</li></ul>
-
-      <h2>hot constructs</h2>
-      <ul id="rooms" class="rows state-wide"><li class="narrative">…</li></ul>
-
-      <h2>cold storage — last 24h</h2>
-      <ul id="archives" class="scrollpane rows"><li class="narrative">…</li></ul>
-      <p class="narrative" id="storage-link" style="margin-top:0.3rem;"></p>
-
-      <h2>grid traffic</h2>
+      <section class="cold-section" aria-labelledby="cold-heading">
+      <div class="section-heading">
+        <div><h2 id="cold-heading">cold storage</h2>
+        <p class="section-note">Recordings from the last 24 hours.</p></div>
+        <a class="act" href="/storage">browse the stacks</a>
+      </div>
+      <ul id="archives" class="room-list"><li class="empty-state">reading cold storage…</li></ul>
+      <p class="section-note" id="storage-link"></p>
+      </section>
+      </main>
+      <aside aria-labelledby="operators-heading">
+      <h2 id="operators-heading">operators online <span id="user-count" class="count"></span></h2>
+      <ul id="users"><li class="section-note">tuning in…</li></ul>
+      </aside>
+      </div>
+      <details class="traffic">
+      <summary>grid traffic <span class="section-note">— recent activity</span></summary>
       <div class="log panel" id="events"></div>
+      </details>
     </div>
 
-    <p class="narrative" style="margin-top:1.5rem;">
+    <footer class="grid-footer">
       <span id="session-info" style="display:none;">
-        <button class="cmd" id="logout-btn">jack out of the grid</button> ·
-        <button class="cmd" id="chimes-btn">chimes: on</button> ·
-        <button class="cmd" id="pings-btn">pings: off</button> ·
+        <button class="cmd act" id="logout-btn">jack out of the grid</button>
+        <button class="cmd act" id="chimes-btn">chimes: on</button>
+        <button class="cmd act" id="pings-btn" aria-describedby="ping-hint">pings: off</button>
       </span>
       <HelpDeck />
-    </p>
+      <p id="ping-hint" class="section-note" hidden></p>
+    </footer>
 
     <script>
       import { diag, getHandle, setHandle, clearHandle } from '../lib/diag';
@@ -65,189 +88,132 @@ import HelpDeck from '../components/HelpDeck.astro';
       const nameInput = document.getElementById('name-input') as HTMLInputElement;
       nameInput.value = getHandle() ?? '';
 
-      // Delegated once: the lists are re-rendered wholesale on every state
-      // broadcast, so per-row handlers would stack up.
-      for (const id of ['rooms', 'archives']) {
-        const list = document.getElementById(id)!;
-        // The class is what makes the rows look clickable, so it can never
-        // drift from the handler that makes them clickable.
-        list.classList.add('wired');
-        list.addEventListener('click', (ev) => {
-          const el = ev.target as HTMLElement;
-          if (el.closest('a')) return;
-          if (window.getSelection()?.toString()) return;
-          const link = el.closest('li')?.querySelector('a');
-          if (link) {
-            diag(`click: row activated -> ${link.getAttribute('href')}`);
-            location.href = link.href;
-          }
-        });
+
+      function textElement(tag: string, className: string, text: string) {
+        const el = document.createElement(tag);
+        el.className = className;
+        el.textContent = text;
+        return el;
+      }
+
+      // Native links make the entire record work with keyboard, touch,
+      // modifier-click and the browser's open-in-new-tab menu.
+      function roomLink(id: string, archive: boolean, action: string) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'room-link';
+        a.href = `/${archive ? 'archive' : 'chat'}/${encodeURIComponent(id)}`;
+        const body = textElement('div', 'room-body', '');
+        body.append(textElement('h3', 'room-name', id));
+        a.append(body, textElement('span', 'room-action cmd act', action));
+        li.append(a);
+        return { li, a, body };
       }
 
       function render(state: any) {
-        // Operators don't vanish just because they're in a construct: merge
-        // lobby presence with live-room occupants, annotated with the room.
+        lastState = state;
+        // Keep the exact control, not merely its destination: several sidebar
+        // operators and the main room row can all link to the same room.
+        const focused = document.activeElement;
+        const focusedList = focused instanceof HTMLAnchorElement
+          ? focused.closest('#rooms, #archives, #users') : null;
+        const focusedHref = focusedList ? focused?.getAttribute('href') : null;
+        const focusedOperator = focused instanceof HTMLAnchorElement ? focused.dataset.operator : undefined;
         const inConstruct = new Map<string, string>();
+        const away = new Set<string>();
         for (const room of state.rooms) {
           for (const p of room.participants) inConstruct.set(p, room.roomId);
+          for (const p of room.away ?? []) away.add(p);
         }
         const users = document.getElementById('users')!;
-        users.innerHTML = '';
-        // You first — handles are easy to change and easy to forget — then
-        // everyone else alphabetically.
+        users.replaceChildren();
         const names = [...new Set<string>([...state.users, ...inConstruct.keys()])].sort(
           (a, b) => (a === myName ? -1 : b === myName ? 1 : a.localeCompare(b)),
         );
+        document.getElementById('user-count')!.textContent = String(names.length);
         for (const name of names) {
           const li = document.createElement('li');
-          li.textContent = name;
-          if (name === myName) {
-            const you = document.createElement('span');
-            you.className = 'narrative';
-            you.textContent = ' (you)';
-            li.appendChild(you);
-          }
+          li.append(textElement('div', 'operator-name', name + (name === myName ? ' (you)' : '')));
           const room = inConstruct.get(name);
           if (room) {
-            const tag = document.createElement('span');
-            tag.className = 'narrative';
-            tag.textContent = ` (in ${room})`;
-            li.appendChild(tag);
+            const a = document.createElement('a');
+            a.className = 'operator-room act';
+            a.dataset.operator = name;
+            a.href = `/chat/${encodeURIComponent(room)}`;
+            a.textContent = `${away.has(name) ? 'away · ' : 'in '}${room}`;
+            li.append(a);
+          } else {
+            li.append(textElement('span', 'section-note', 'in the lobby'));
           }
-          users.appendChild(li);
+          users.append(li);
         }
 
         const rooms = document.getElementById('rooms')!;
-        rooms.innerHTML = '';
+        rooms.replaceChildren();
+        document.getElementById('room-count')!.textContent = String(state.rooms.length);
         if (!state.rooms.length) {
-          rooms.innerHTML = '<li class="narrative">the grid hums, empty. no constructs running.</li>';
+          rooms.append(textElement('li', 'empty-state', 'No voices on channel. Spin up a construct to start talking.'));
         }
         for (const room of state.rooms) {
-          // Same two-line record as cold storage: name on the head line, then
-          // the action leading the line below so it sits in a fixed column
-          // however long the construct's name runs.
-          const li = document.createElement('li');
-          li.className = 'record';
-          const head = document.createElement('div');
-          head.className = 'record-head';
           const empty = !room.participants.length;
-          const name = document.createElement('span');
-          name.className = empty ? 'status-running' : 'status-live';
-          name.textContent = room.roomId;
-          head.appendChild(name);
-          head.append(' · ');
+          const { li, a, body } = roomLink(room.roomId, false, empty ? 'patch back in' : 'patch in');
+          a.classList.add(empty ? 'room-held' : 'room-live');
+          const awaySet = new Set(room.away ?? []);
+          body.append(textElement('p', 'room-people', empty ? 'channel empty' :
+            room.participants.map((p: string) => p + (awaySet.has(p) ? ' (away)' : '')).join(', ')));
+          const status = textElement('p', 'room-status', '');
           if (empty) {
-            // An empty room is held open for a few seconds so whoever dropped
-            // can get back in. Naming the emptiness here is what lets the line
-            // below say only the thing that matters: it is about to flatline.
-            const none = document.createElement('span');
-            none.className = 'narrative';
-            none.textContent = 'empty';
-            head.appendChild(none);
+            if (room.sealsAt) status.dataset.sealsAt = String(room.sealsAt);
+            status.textContent = carrierLost ? 'countdown stale' : 'closing the tape…';
           } else {
-            // Voices share the head line with the name: together they say
-            // which construct this is. Text nodes, not innerHTML: participant
-            // handles are operator-typed strings.
-            //
-            // Someone whose device is locked or backgrounded is still in the
-            // room and still being taped, but listing them unqualified is how
-            // the lobby ends up lying for the ~12s before TCP notices.
-            const awaySet = new Set(room.away ?? []);
-            room.participants.forEach((p, i) => {
-              if (i) head.append(', ');
-              head.append(p);
-              if (awaySet.has(p)) {
-                const away = document.createElement('span');
-                away.className = 'narrative';
-                away.textContent = ' (away)';
-                head.appendChild(away);
-              }
-            });
+            status.textContent = carrierLost ? 'last seen recording' : 'recording';
           }
-          li.appendChild(head);
-
-          const meta = document.createElement('div');
-          meta.className = 'record-meta';
-          const state = document.createElement('span');
-          state.className = 'col col-state';
-          if (empty) {
-            // Three states, not two. Between the last voice vanishing and the
-            // hold starting, the room is empty with no deadline yet — showing
-            // "~0s" there was a countdown that hadn't begun, and it jumped
-            // back up to the full window once the tape finished closing.
-            const secs = room.sealsAt
-              ? Math.max(0, Math.round((room.sealsAt - Date.now()) / 1000))
-              : null;
-            state.classList.add('status-running');
-            state.textContent = secs !== null
-              ? `flatlines in ~${secs}s`
-              : 'closing the tape…';
-          } else {
-            state.textContent = 'recording';
-          }
-          meta.appendChild(state);
-          const a = document.createElement('a');
-          a.className = 'act';
-          a.href = `/chat/${room.roomId}`;
-          a.textContent = empty ? 'patch back in' : 'patch in';
-          meta.appendChild(a);
-          li.appendChild(meta);
-          rooms.appendChild(li);
+          body.append(status);
+          rooms.append(li);
         }
+        refreshCountdowns();
 
         const archives = document.getElementById('archives')!;
-        archives.innerHTML = '';
+        archives.replaceChildren();
         if (!state.archives.length) {
-          archives.innerHTML = '<li class="narrative">nothing has flatlined in the last day.</li>';
+          archives.append(textElement('li', 'empty-state', 'No recordings in the last 24 hours. Older conversations are in the stacks.'));
         }
-        const link = document.getElementById('storage-link')!;
-        link.innerHTML = `${state.archiveTotal ?? state.archives.length} construct(s) in cold storage · <a href="/storage">browse the stacks</a>`;
+        document.getElementById('storage-link')!.textContent =
+          `${state.archiveTotal ?? state.archives.length} constructs in cold storage`;
         for (const ar of state.archives) {
-          const li = document.createElement('li');
-          li.className = 'record';
-          const head = document.createElement('div');
-          head.className = 'record-head';
-          const name = document.createElement('span');
-          name.className = 'status-sealed';
-          name.textContent = ar.roomId;
-          head.appendChild(name);
-          // Name and voices both identify the recording, so they share the
-          // head line. Appended as a text node, not innerHTML: participant
-          // handles are operator-typed strings.
-          head.append(` · ${ar.participants.length ? ar.participants.join(', ') : 'no one spoke'}`);
-          li.appendChild(head);
-
-          // Nothing operator-typed left on this line, so it can be built as
-          // markup. Same field order as the stacks, so the views read alike.
-          const meta = document.createElement('div');
-          meta.className = 'record-meta';
-          const state =
-            ar.transcript === 'running' ? '<span class="status-running">wintermute parsing…</span>'
-            : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
-            : ar.transcript === 'done' ? 'parsed'
-            : 'unparsed';
-          meta.innerHTML =
-            `flatlined <span class="col col-ago">${fmtAgo(ar.endedAt)}</span>` +
-            ` · <span class="col col-dur">${fmtDur(ar.durationMs)}</span>` +
-            ` · <span class="col col-state">${state}</span>`;
-          const a = document.createElement('a');
-          a.className = 'act';
-          a.href = `/archive/${ar.roomId}`;
-          a.textContent = 'access';
-          meta.appendChild(a);
-          li.appendChild(meta);
-          archives.appendChild(li);
+          const { li, body } = roomLink(ar.roomId, true, 'access tape');
+          body.append(textElement('p', 'room-people', ar.participants.length ? ar.participants.join(', ') : 'no taped voices'));
+          const meta = textElement('p', 'room-status', `flatlined ${fmtAgo(ar.endedAt)} · ${fmtDur(ar.durationMs)} · `);
+          const label = ar.transcript === 'running' ? 'wintermute parsing…'
+            : ar.transcript === 'failed' ? 'transcript failed'
+            : ar.transcript === 'done' ? 'transcript ready' : 'no transcript yet';
+          meta.append(textElement('span', ar.transcript === 'failed' ? 'status-failed' :
+            ar.transcript === 'running' ? 'status-running' : '', label));
+          body.append(meta);
+          archives.append(li);
         }
 
+        if (focusedList && focusedHref) {
+          const links = focusedList.querySelectorAll<HTMLAnchorElement>('a');
+          Array.from(links).find(a => a.getAttribute('href') === focusedHref &&
+            a.dataset.operator === focusedOperator)?.focus({ preventScroll: true });
+        }
         const events = document.getElementById('events')!;
-        events.innerHTML = '';
+        events.replaceChildren();
         for (const ev of [...state.events].reverse()) {
-          const div = document.createElement('div');
-          div.textContent = ev.text;
-          events.appendChild(div);
+          events.append(textElement('div', '', ev.text));
         }
         signalNewEvents(state.events);
       }
+
+      function refreshCountdowns() {
+        document.querySelectorAll<HTMLElement>('[data-seals-at]').forEach(el => {
+          const secs = Math.max(0, Math.ceil((Number(el.dataset.sealsAt) - Date.now()) / 1000));
+          el.textContent = carrierLost ? 'countdown stale' :
+            secs > 0 ? `flatlines in ~${secs}s` : 'waiting for seal…';
+        });
+      }
+      window.setInterval(refreshCountdowns, 1000);
 
       // --- chimes & pings -------------------------------------------------
       let chimesOn = (localStorage.getItem('overheard-chimes') ?? '1') === '1';
@@ -284,21 +250,56 @@ import HelpDeck from '../components/HelpDeck.astro';
 
       let ws: WebSocket | null = null;
       let reconnect = true;
+      let reconnectTimer = 0;
+      let lastState: any = null;
+      let carrierLost = false;
+      let darkSince = 0;
+      let darkTimer = 0;
+      const carrierEl = document.getElementById('carrier')!;
+
+      function paintCarrier() {
+        const secs = Math.round((Date.now() - darkSince) / 1000);
+        carrierEl.textContent =
+          `carrier lost — ${secs}s dark, retrying. what's below is a snapshot.`;
+      }
+
+      // A silent retry leaves a confident, frozen lobby on screen. Say the
+      // line is down, and repaint so nothing keeps counting behind it.
+      function setCarrier(lost: boolean) {
+        if (lost === carrierLost) return;
+        carrierLost = lost;
+        carrierEl.hidden = !lost;
+        if (lost) {
+          darkSince = Date.now();
+          paintCarrier();
+          darkTimer = window.setInterval(paintCarrier, 1000);
+        } else {
+          clearInterval(darkTimer);
+        }
+        if (lastState) render(lastState);
+      }
 
       function connect(name: string) {
+        clearTimeout(reconnectTimer);
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
         diag(`lobby ws: connecting as ${JSON.stringify(name)}`);
-        ws = new WebSocket(`${proto}://${location.host}/ws`);
-        ws.onopen = () => {
+        const socket = new WebSocket(`${proto}://${location.host}/ws`);
+        ws = socket;
+        socket.onopen = () => {
+          if (ws !== socket || !reconnect) return;
           diag('lobby ws: open, sending lobby.join');
-          ws!.send(JSON.stringify({ type: 'lobby.join', requestId: 1, name }));
+          socket.send(JSON.stringify({ type: 'lobby.join', requestId: 1, name }));
         };
-        ws.onmessage = (ev) => {
+        socket.onmessage = (ev) => {
+          if (ws !== socket || !reconnect) return;
           const msg = JSON.parse(ev.data);
           const state = msg.type === 'lobby.state' ? msg
             : msg.type === 'response' && msg.data?.type === 'lobby.state' ? msg.data
             : null;
           if (state) {
+            // The snapshot is current only after state arrives, not on open.
+            lastState = null;
+            setCarrier(false);
             diag('lobby.state received', {
               users: state.users.length,
               rooms: state.rooms.length,
@@ -307,9 +308,13 @@ import HelpDeck from '../components/HelpDeck.astro';
             render(state);
           }
         };
-        ws.onclose = () => {
+        socket.onclose = () => {
+          if (ws !== socket) return;
           diag(`lobby ws: closed (reconnect=${reconnect})`);
-          if (reconnect) setTimeout(() => connect(name), 3000);
+          if (reconnect) {
+            setCarrier(true);
+            reconnectTimer = window.setTimeout(() => connect(name), 3000);
+          }
         };
       }
 
@@ -349,7 +354,12 @@ import HelpDeck from '../components/HelpDeck.astro';
         if (last) localStorage.setItem('overheard-last-handle', last);
         clearHandle();
         reconnect = false;
+        clearTimeout(reconnectTimer);
         ws?.close();
+        ws = null;
+        lastState = null;
+        lastEventTs = -1;
+        setCarrier(false);
         nameInput.value = last ?? '';
         commons.style.display = 'none';
         document.getElementById('session-info')!.style.display = 'none';
@@ -362,6 +372,7 @@ import HelpDeck from '../components/HelpDeck.astro';
       const pingsBtn = document.getElementById('pings-btn') as HTMLButtonElement;
       const syncToggleLabels = () => {
         chimesBtn.textContent = `chimes: ${chimesOn ? 'on' : 'off'}`;
+        chimesBtn.setAttribute('aria-pressed', String(chimesOn));
         // Pings has browser-owned states beyond on/off: surface them
         // instead of letting a click silently do nothing.
         if (!('Notification' in window)) {
@@ -382,6 +393,10 @@ import HelpDeck from '../components/HelpDeck.astro';
           pingsBtn.title = '';
           pingsBtn.textContent = `pings: ${pingsOn ? 'on' : 'off'}`;
         }
+        pingsBtn.setAttribute('aria-pressed', String(pingsOn));
+        const hint = document.getElementById('ping-hint')!;
+        hint.textContent = pingsBtn.title;
+        hint.hidden = !pingsBtn.title;
       };
       syncToggleLabels();
       // Permission can change in site settings while the tab is open.
@@ -441,11 +456,22 @@ import HelpDeck from '../components/HelpDeck.astro';
 
       document.getElementById('dig-btn')!.addEventListener('click', async () => {
         diag('click: spin up a construct');
-        const res = await fetch('/api/dig');
-        const { roomId } = await res.json();
-        diag(`construct name assigned: ${roomId}, navigating to /chat/${roomId}`);
-        document.getElementById('dig-hint')!.textContent = ` compiling ${roomId}…`;
-        setTimeout(() => (location.href = `/chat/${roomId}`), 400);
+        const button = document.getElementById('dig-btn') as HTMLButtonElement;
+        const hint = document.getElementById('dig-hint')!;
+        button.disabled = true;
+        hint.hidden = false;
+        hint.textContent = 'spinning up a construct…';
+        try {
+          const res = await fetch('/api/dig', { signal: AbortSignal.timeout(10000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const { roomId } = await res.json();
+          if (typeof roomId !== 'string' || !roomId) throw new Error('missing construct name');
+          location.href = `/chat/${encodeURIComponent(roomId)}`;
+        } catch (error) {
+          diag('construct could not be created', error);
+          hint.textContent = 'could not reach the grid. try spinning up again.';
+          button.disabled = false;
+        }
       });
     </script>
   </body>

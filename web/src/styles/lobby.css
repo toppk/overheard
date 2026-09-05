@@ -1,0 +1,55 @@
+@import './records.css';
+/* The grid is a working lobby: rooms first, presence alongside, traffic on demand. */
+body.lobby { max-width: 76rem; margin: 2.5rem auto; padding: 0 2rem; }
+.lobby { --dim: #839ba8; }
+.grid-header { padding-bottom: 1.6rem; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
+.grid-header h1 { margin: 0; }
+.grid-intro { color: var(--text); margin: 0.7rem 0 0.4rem; }
+.grid-fiction { font-size: 0.8rem; color: var(--dim); }
+.grid-fiction p { max-width: 75ch; }
+.lobby summary { cursor: pointer; width: fit-content; }
+.lobby summary:focus-visible { outline: 1px solid var(--cyan); outline-offset: 4px; }
+.lobby-layout { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 2.5rem; }
+.lobby main, .lobby aside { min-width: 0; }
+.lobby aside { border-left: 1px solid var(--border); padding-left: 1.5rem; }
+.lobby h2 { margin: 0; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.section-note { color: var(--dim); font-size: 0.8rem; margin: 0.3rem 0 0; }
+.count { color: var(--dim); font-size: 0.8rem; font-weight: normal; margin-left: 0.3rem; }
+.lobby .primary { padding: 0.7rem 0; font-size: 0.85rem; font-weight: 700; }
+.lobby .primary:disabled { opacity: 0.6; cursor: wait; }
+.lobby #users > li::before { content: none; }
+.cold-section { margin-top: 2.5rem; }
+.cold-section .room-link:focus-visible { background: #0d171e; }
+.cold-section .section-heading > a { font-size: 0.8rem; }
+.lobby #users { margin-top: 1rem; }
+.lobby #users li { padding: 0.7rem 0; overflow-wrap: anywhere; }
+.operator-name { color: #d1e1e8; font-size: 0.85rem; }
+.lobby .operator-room { display: block; font-size: 0.75rem; white-space: normal; margin-top: 0.15rem; }
+.lobby .operator-room::before, .lobby .operator-room::after { content: none; }
+.traffic { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+.traffic summary { color: var(--dim); padding: 0.5rem 0; }
+.grid-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; font-size: 0.8rem; }
+.grid-footer #session-info { display: contents !important; }
+.grid-footer #session-info[style*="none"] { display: none !important; }
+.grid-footer button { min-height: 44px; }
+.grid-footer .help-trigger { --ink: var(--act); --halo: none; }
+#ping-hint { flex-basis: 100%; }
+.entry-controls { margin-top: 0.5rem; display: flex; gap: 0.6rem; }
+.entry-controls input { min-width: 0; }
+.lobby #name-panel { max-width: 30rem; }
+.lobby .carrier { border: 1px solid var(--amber); padding: 0.8rem 1rem; margin-bottom: 1.5rem; text-shadow: none; }
+.lobby #dig-hint { color: var(--amber); font-size: 0.85rem; }
+@media (max-width: 1000px) {
+  .lobby-layout { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .lobby aside { border-left: none; border-top: 1px solid var(--border); padding: 1.25rem 0 0; }
+  .lobby #users { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+  .lobby #users li { max-width: 18rem; }
+}
+@media (max-width: 560px) {
+  body.lobby { padding: 0 1rem; margin: 1.5rem auto; }
+  .grid-header { margin-bottom: 1.5rem; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 0.75rem; }
+  .lobby .primary { min-height: 44px; text-align: left; }
+  .grid-header h1 { font-size: 1rem; letter-spacing: 0.04em; }
+}

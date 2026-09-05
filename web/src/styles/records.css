@@ -1,0 +1,29 @@
+/* Shared by the grid and the stacks: a pool of background groups each tape,
+   while bracketed commands retain the site's terminal control language. */
+.room-list { margin: 0; }
+.room-list > li { padding: 0; }
+.room-list > li::before { content: none; }
+.room-list > li + li { margin-top: 0.65rem; }
+.room-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1.25rem; padding: 1rem 1.1rem; background: var(--panel); white-space: normal; color: var(--text); text-shadow: none; }
+.room-link::before, .room-link::after { content: none; }
+.room-name { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.room-name::before { content: '▸ '; color: var(--off); }
+.room-people { margin: 0.25rem 0 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.room-status { margin: 0.45rem 0 0; color: var(--dim); font-size: 0.75rem; }
+.room-live .room-name, .room-live .room-status { color: var(--cyan); }
+.room-live .room-name { text-shadow: 0 0 8px rgba(75, 228, 228, 0.2); }
+.room-held .room-status { color: var(--amber); }
+.room-action { padding: 0.65rem 0; font-size: 0.8rem; white-space: nowrap; text-align: right; min-width: 9rem; }
+.room-link:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+.room-link:focus-visible .room-action { --ink: var(--lit); --halo: 0 0 18px rgba(75, 228, 228, 0.7); --bracket: var(--cyan); }
+@media (hover: hover) {
+  .room-link:hover { background: #0d171e; }
+  .room-link:hover .room-action { --ink: var(--lit); --halo: 0 0 18px rgba(75, 228, 228, 0.7); --bracket: var(--cyan); }
+}
+.empty-state { color: var(--dim); padding: 1.5rem !important; background: var(--panel); font-size: 0.85rem; }
+.room-snippet { margin: 0.7rem 0 0; color: var(--dim); font-size: 0.85rem; font-style: italic; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .room-link { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; padding: 1rem; }
+  .room-action { justify-self: start; text-align: left; }
+  .room-name { font-size: 0.9rem; }
+}

@@ -278,6 +278,13 @@ mark {
 .flow-row.off .flow-arrow,
 .flow-row.off .meter { color: var(--red); opacity: 0.75; }
 
+/* The lobby's honesty line: the socket is down and the view below is frozen. */
+.carrier {
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(224, 175, 104, 0.35);
+  margin: 0.6rem 0;
+}
+
 .status-live { color: var(--cyan); }
 .status-sealed { color: var(--dim); }
 .status-running { color: var(--amber); }

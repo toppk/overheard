@@ -1,5 +1,6 @@
 ---
 import '../../styles/neon.css';
+import '../../styles/records.css';
 ---
 <html lang="en">
   <head>
@@ -7,28 +8,29 @@ import '../../styles/neon.css';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>overheard // the stacks</title>
   </head>
-  <body>
+  <body class="stacks">
     <h1>cold storage // the stacks</h1>
     <p class="narrative">
       Every flatlined construct, kept exactly as it went to tape. Query the
       stacks; the daemon indexed every word.
     </p>
 
-    <div class="panel">
-      <input id="q" placeholder="query the stacks… (full-text over every transcript)" style="width:100%;" />
+    <div class="panel search-panel">
+      <label for="q" class="search-label">query the stacks</label>
+      <input id="q" placeholder="a word or phrase from the tape…" style="width:100%;" />
       <div class="toggles" id="date-toggles">
         <span class="label">sealed</span>
-        <button class="toggle on" data-since="">all time</button>
-        <button class="toggle" data-since="86400000">24h</button>
-        <button class="toggle" data-since="604800000">7d</button>
-        <button class="toggle" data-since="2592000000">30d</button>
+        <button class="cmd toggle on" data-since="">all time</button>
+        <button class="cmd toggle" data-since="86400000">24h</button>
+        <button class="cmd toggle" data-since="604800000">7d</button>
+        <button class="cmd toggle" data-since="2592000000">30d</button>
       </div>
       <div class="toggles" id="dur-toggles">
         <span class="label">ran for</span>
-        <button class="toggle on" data-min="" data-max="">any</button>
-        <button class="toggle" data-min="" data-max="300000">&lt;5m</button>
-        <button class="toggle" data-min="300000" data-max="1800000">5–30m</button>
-        <button class="toggle" data-min="1800000" data-max="">&gt;30m</button>
+        <button class="cmd toggle on" data-min="" data-max="">any</button>
+        <button class="cmd toggle" data-min="" data-max="300000">under 5m</button>
+        <button class="cmd toggle" data-min="300000" data-max="1800000">5–30m</button>
+        <button class="cmd toggle" data-min="1800000" data-max="">over 30m</button>
       </div>
       <div class="toggles" id="handle-toggles">
         <span class="label">voices</span>
@@ -42,7 +44,29 @@ import '../../styles/neon.css';
       <a href="/">// the grid</a>
     </div>
 
-    <ul id="results" class="rows"></ul>
+    <ul id="results" class="room-list"></ul>
+
+    <style is:global>
+      body.stacks { max-width: 62rem; padding: 0 2rem; --dim: #839ba8; }
+      .stacks .search-panel { border: none; box-shadow: none; padding: 1.1rem; margin-top: 1.5rem; }
+      .search-label { display: block; color: var(--cyan); font-size: 0.85rem; margin-bottom: 0.5rem; }
+      .stacks input::placeholder { color: var(--dim); opacity: 1; }
+      .stacks .toggles { gap: 0.35rem; }
+      .stacks .toggle { border: 1px dotted var(--off); border-radius: 0; background: none; box-shadow: none; min-height: 0; line-height: 1.2; padding: 0.3em 0.7em; color: var(--text); text-shadow: none; }
+      .stacks .toggle::before, .stacks .toggle::after { content: none; }
+      .stacks .toggle.on { background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+      .stacks .toggle:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+      @media (hover: hover) {
+        .stacks .toggle:hover { background: #14303a; color: var(--lit); }
+        .stacks .toggle.on:hover { background: var(--lit); color: var(--bg); }
+      }
+      .stacks-bar { font-size: 0.85rem; }
+      .stacks-bar > a, .stacks-bar > button { padding: 0.6rem 0; }
+      @media (max-width: 560px) {
+        body.stacks { padding: 0 1rem; }
+        .stacks .toggles .label { flex-basis: 100%; margin-top: 0.5rem; }
+      }
+    </style>
 
     <script>
       import { diag } from '../../lib/diag';
@@ -75,7 +99,9 @@ import '../../styles/neon.css';
       qInput.value = state.q;
       const markOn = (containerId: string, match: (b: HTMLElement) => boolean) => {
         document.getElementById(containerId)!.querySelectorAll('.toggle').forEach((b) => {
-          b.classList.toggle('on', match(b as HTMLElement));
+          const on = match(b as HTMLElement);
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
         });
       };
       markOn('date-toggles', (b) => (b.dataset.since ?? '') === state.sinceMs);
@@ -85,39 +111,32 @@ import '../../styles/neon.css';
 
       function renderRow(ar: any): HTMLLIElement {
         const li = document.createElement('li');
-        const who = ar.participants.length ? ar.participants.map(esc).join(', ') : 'no one spoke';
+        const who = ar.participants.length ? ar.participants.map(esc).join(', ') : 'no taped voices';
         const status =
-          ar.transcript === 'done' ? 'parsed'
-          : ar.transcript === 'running' ? '<span class="status-running">parsing…</span>'
-          : ar.transcript === 'failed' ? '<span class="status-failed">parse failed</span>'
-          : 'unparsed';
-        li.className = 'record';
-        const head = document.createElement('div');
-        head.className = 'record-head';
-        // Name and voices both identify the recording, so they share the head
-        // line; what varies goes below, ending with the action.
-        head.innerHTML = `<span class="status-sealed">${esc(ar.roomId)}</span> · ${who}`;
-        li.appendChild(head);
-        const meta = document.createElement('div');
-        meta.className = 'record-meta';
-        meta.innerHTML =
-          `sealed <span class="col col-ago">${fmtAgo(ar.endedAt)}</span>` +
-          ` · <span class="col col-dur">${fmtDur(ar.durationMs)}</span>` +
-          ` · <span class="col col-state">${status}</span>`;
+          ar.transcript === 'done' ? 'transcript ready'
+          : ar.transcript === 'running' ? '<span class="status-running">wintermute parsing…</span>'
+          : ar.transcript === 'failed' ? '<span class="status-failed">transcript failed</span>'
+          : 'no transcript yet';
         const a = document.createElement('a');
-        a.className = 'act';
-        a.href = `/archive/${ar.roomId}`;
-        a.textContent = 'access';
-        meta.appendChild(a);
-        li.appendChild(meta);
+        a.className = 'room-link';
+        a.href = `/archive/${encodeURIComponent(ar.roomId)}`;
+        const body = document.createElement('div');
+        body.className = 'room-body';
+        body.innerHTML = `<h3 class="room-name">${esc(ar.roomId)}</h3>` +
+          `<p class="room-people">${who}</p>` +
+          `<p class="room-status">flatlined ${fmtAgo(ar.endedAt)} · ${fmtDur(ar.durationMs)} · ${status}</p>`;
+        const action = document.createElement('span');
+        action.className = 'room-action cmd act';
+        action.textContent = 'access tape';
+        a.append(body, action);
+        li.appendChild(a);
         if (ar.snippet) {
           const div = document.createElement('div');
-          div.className = 'narrative';
-          div.style.marginLeft = '1rem';
+          div.className = 'room-snippet';
           div.innerHTML = esc(ar.snippet)
             .replaceAll('\u0001', '<mark>')
             .replaceAll('\u0002', '</mark>');
-          li.appendChild(div);
+          body.appendChild(div);
         }
         return li;
       }
@@ -146,6 +165,12 @@ import '../../styles/neon.css';
         state.total = data.total;
         if (!append) results.innerHTML = '';
         for (const ar of data.rows) results.appendChild(renderRow(ar));
+        if (!data.total) {
+          const empty = document.createElement('li');
+          empty.className = 'empty-state';
+          empty.textContent = 'no tapes match. try another query or open up the filters.';
+          results.appendChild(empty);
+        }
         state.offset += data.rows.length;
         const partial = state.offset < state.total ? ` · ${state.offset} pulled` : '';
         summary.textContent = `${state.total} construct${state.total === 1 ? ' matches' : 's match'}${state.q ? ` "${state.q}"` : ''}${partial}.`;
@@ -158,8 +183,12 @@ import '../../styles/neon.css';
         container.addEventListener('click', (e) => {
           const btn = (e.target as HTMLElement).closest('.toggle') as HTMLElement | null;
           if (!btn) return;
-          container.querySelectorAll('.toggle').forEach((b) => b.classList.remove('on'));
+          container.querySelectorAll('.toggle').forEach((b) => {
+            b.classList.remove('on');
+            b.setAttribute('aria-pressed', 'false');
+          });
           btn.classList.add('on');
+          btn.setAttribute('aria-pressed', 'true');
           apply(btn);
           search();
         });
@@ -181,11 +210,13 @@ import '../../styles/neon.css';
         }
         for (const h of handles) {
           const btn = document.createElement('button');
-          btn.className = 'toggle';
+          btn.className = 'cmd toggle';
           btn.classList.toggle('on', state.handles.has(h.handle));
+          btn.setAttribute('aria-pressed', String(state.handles.has(h.handle)));
           btn.textContent = `${h.handle} (${h.rooms})`;
           btn.addEventListener('click', () => {
             const on = btn.classList.toggle('on');
+            btn.setAttribute('aria-pressed', String(on));
             if (on) state.handles.add(h.handle);
             else state.handles.delete(h.handle);
             search();
