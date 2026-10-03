@@ -296,7 +296,7 @@ function startScribe(roomId: string): boolean {
 }
 
 // Use HTTPS when certs exist (required for mic access from non-localhost,
-// e.g. iPad Safari on the LAN). Generate with scripts/gen-certs.sh.
+// e.g. iPad Safari on the LAN); without them, a TLS-terminating proxy must front it.
 let server: http.Server | https.Server;
 const certFile = path.join(config.certsDir, 'cert.pem');
 const keyFile = path.join(config.certsDir, 'key.pem');
@@ -305,10 +305,12 @@ if (fs.existsSync(certFile) && fs.existsSync(keyFile)) {
     { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) },
     app,
   );
-  console.log('using HTTPS (certs/ found)');
+  console.log(`using HTTPS (certs in ${config.certsDir})`);
 } else {
   server = http.createServer(app);
-  console.log('using HTTP (no certs/ found; mic only works on localhost)');
+  console.log(
+    `using HTTP (no certs in ${config.certsDir}): expects a TLS-terminating proxy in front; otherwise mic only works on localhost`,
+  );
 }
 
 const wss = new WebSocketServer({ server, path: '/ws' });

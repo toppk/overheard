@@ -26,15 +26,28 @@ podman container under a systemd **user** unit.
 
 - unit: `container-overheard` — `systemctl --user status container-overheard`
 - image: `localhost/overheard:dev`, built from this working tree
-- config: a **read-only** `/conf` bind mount — `certs/` plus
-  `overheard.env`, which is also the unit's `--env-file`. That file sets
-  `CERTS_DIR=/conf/certs`, overriding the image default of `/data/certs`.
+- config: a **read-only** `/conf` bind mount holding `overheard.env`,
+  which is also the unit's `--env-file`.
 - state: a `/data` bind mount — recordings, search index, model cache.
 
   Both live **outside the repo**, so image rebuilds never touch either, and
-  the split keeps what you author separate from what the app owns. A new
-  cert is a file drop plus a restart; no rebuild. `podman inspect overheard`
-  shows the mount sources and env when you need them.
+  the split keeps what you author separate from what the app owns.
+  `podman inspect overheard` shows the mount sources and env when you need
+  them.
+
+- TLS: **this instance runs behind Apache**, which terminates TLS for
+  `https://overheard.x.bllue.org/` and proxies to `127.0.0.1:21310`
+  (`HOST=127.0.0.1`, `PORT=21310` — the port comes from foundation's
+  registry, and Apache is configured to match, so don't change it on this
+  side alone). `CERTS_DIR=/conf/nocerts` is an empty directory, so the app
+  serves plain HTTP; the server logs `using HTTP` and that is correct here.
+  The RTC range (40000–40100) is still reached directly, not via Apache.
+
+  Other deployments use **native TLS** (cert.pem + key.pem in `CERTS_DIR`,
+  served on whatever `HOST`/`PORT`); both modes are supported and
+  documented in the README — don't optimise one away. The app is
+  proxy-agnostic: clients build `wss://` from `location`, and the server
+  never reads forwarded headers or builds absolute URLs. Keep it that way.
 
 Redeploy after a change:
 
@@ -46,8 +59,15 @@ podman logs overheard 2>&1 | tail   # "overheard listening on …" = up
 
 The unit was made with `podman generate systemd --new`, so a restart
 recreates the container from whatever `localhost/overheard:dev` currently
-is — no `podman run` needed. The standalone dev server and the container
-fight over port 3000 and the RTC range; stop one before starting the other.
+is — no `podman run` needed. The standalone dev server (`:3000`) and the
+container no longer share an HTTP port, but they still fight over the RTC
+range; stop one before starting the other.
+
+A rebuild re-resolves the Python dependencies, so check a transcript after
+one. PyAV 19 once landed this way and broke faster-whisper's audio open;
+`transcription/requirements.txt` now pins it. The scribe exits non-zero
+(and writes no transcript) when every track fails, so the lobby says
+"wintermute chokes" rather than filing an empty transcript.
 
 ## Releases
 

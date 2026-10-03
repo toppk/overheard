@@ -74,7 +74,7 @@ mount:
 ```
 data/
   recordings/     audio, transcripts, metadata (source of truth)
-  certs/          cert.pem (full chain) + key.pem -> HTTPS on
+  certs/          cert.pem (full chain) + key.pem -> HTTPS on (omit behind a TLS proxy)
   index/          rebuildable search index (overheard.db)
   hf-cache/       whisper model cache (avoids re-downloading)
   overheard.env   instance config (see env table below)
@@ -83,7 +83,8 @@ data/
 ```sh
 mkdir -p data/{recordings,certs,index,hf-cache}
 printf 'MEDIASOUP_ANNOUNCED_IPS=<public-ip>[,<lan-ip>]\n' > data/overheard.env
-# put TLS cert.pem (full chain) + key.pem into data/certs/
+# native TLS: put cert.pem (full chain) + key.pem into data/certs/
+# (or terminate TLS in a proxy — see below)
 
 podman run -d --name overheard --network host \
   -v $PWD/data:/data \
@@ -97,15 +98,38 @@ keep `MEDIASOUP_ANNOUNCED_IPS` pointing at the host.
 
 Open exactly these ports:
 
-- `3000/tcp` — HTTPS + WSS signaling
+- `3000/tcp` — HTTPS + WSS signaling (native TLS only; behind a proxy,
+  open the proxy's 443 instead and keep `3000` off the internet)
 - `40000-40100/udp` — WebRTC media
 - `40000-40100/tcp` — ICE-TCP fallback (optional but recommended)
 
 No TURN server yet — clients must be able to reach an announced IP
 directly, which works for the common client-behind-NAT case since the
-server is the media endpoint. Browsers require HTTPS for microphone access
-on non-localhost origins, so real certificates in `data/certs/` are
-effectively required.
+server is the media endpoint. Media never goes through the proxy, so the
+RTC range stays open either way.
+
+### TLS: native or behind a reverse proxy
+
+Browsers require HTTPS for microphone access on non-localhost origins, so
+something has to terminate TLS. Both setups are supported:
+
+- **Native** — put `cert.pem` (full chain) + `key.pem` in `CERTS_DIR`. The
+  server sees them at startup and serves HTTPS + WSS itself.
+- **Behind a proxy** — point `CERTS_DIR` at an empty or missing directory
+  so the server speaks plain HTTP, set `HOST=127.0.0.1` so only the proxy
+  can reach it, and let the proxy hold the certificate. The app needs no
+  forwarded headers: clients derive `wss://` from the page's own origin.
+  The proxy must pass the `/ws` websocket upgrade, e.g. for Apache:
+
+  ```apache
+  ProxyPreserveHost On
+  ProxyPass        / http://127.0.0.1:3000/ upgrade=websocket
+  ProxyPassReverse / http://127.0.0.1:3000/
+  ```
+
+`PORT` is only a default. Hosts that hand out ports centrally set it
+explicitly — the maintainer's own deployment takes its port (21310) from
+foundation's port registry, not the `3000` default.
 
 To run it as a user service surviving reboots:
 
