@@ -351,6 +351,7 @@ def main() -> int:
         print(f"vocabulary bias: {vocab}")
 
     all_utterances: list[dict] = []
+    transcribed = failed = 0
     for track in metadata["tracks"]:
         audio_path = args.room_dir / track["file"]
         if not audio_path.exists():
@@ -373,11 +374,18 @@ def main() -> int:
                 f"({type(err).__name__}: {err}); skipping track",
                 file=sys.stderr,
             )
+            failed += 1
             continue
+        transcribed += 1
         (out_dir / "tracks" / f"{track['participant_id']}.json").write_text(
             json.dumps(utterances, indent=2, ensure_ascii=False)
         )
         all_utterances.extend(utterances)
+
+    if failed and not transcribed:
+        # An empty transcript would read as "nobody spoke"; fail so the room stays retryable.
+        print(f"error: all {failed} track(s) failed to transcribe; no transcript written", file=sys.stderr)
+        return 1
 
     events = place_events(metadata)
     clamp_to_mute_silence(all_utterances, events)
