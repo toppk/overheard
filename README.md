@@ -123,10 +123,11 @@ All configuration is environment variables (put them in
 | var | default | purpose |
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP(S) listen port |
+| `HOST` | all addresses | listen address; `127.0.0.1` behind a reverse proxy (with `--network host` this binds on the host) |
 | `MEDIASOUP_ANNOUNCED_IPS` | all non-internal IPv4s | comma-separated ICE candidate IPs (set explicitly on multi-homed hosts: `public,lan`) |
 | `RTC_MIN_PORT` / `RTC_MAX_PORT` | `40000` / `40100` | WebRTC media port range |
 | `RECORDINGS_DIR` | `recordings` (`/data/recordings` in the image) | where audio/transcripts land |
-| `CERTS_DIR` | `certs` (`/data/certs` in the image) | `cert.pem` + `key.pem`; their presence switches on HTTPS |
+| `CERTS_DIR` | `certs` (`/data/certs` in the image) | `cert.pem` + `key.pem`; their presence switches on HTTPS. Point it at an empty/missing dir to serve plain HTTP behind a TLS-terminating proxy |
 | `DB_PATH` | `data/overheard.db` (`/data/index/overheard.db` in the image) | search index; rebuildable from `RECORDINGS_DIR` |
 | `OPUS_BITRATE` | `96000` | opus max average bitrate clients encode (and thus record) at; browser default is ~32k |
 | `TRANSCRIBE_MODEL` | `small` | faster-whisper model size |

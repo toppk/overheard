@@ -596,8 +596,8 @@ roomManager.onSealed((room) => {
   });
 });
 await initDb();
-server.listen(config.httpPort, () => {
+server.listen(config.httpPort, config.httpHost, () => {
   const proto = server instanceof https.Server ? 'https' : 'http';
-  console.log(`overheard listening on ${proto}://localhost:${config.httpPort}`);
+  console.log(`overheard listening on ${proto}://${config.httpHost ?? 'localhost'}:${config.httpPort}`);
   console.log(`announced IPs for WebRTC: ${config.announcedIps.join(', ')}`);
 });

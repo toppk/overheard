@@ -12,6 +12,8 @@ function detectIps(): string[] {
 
 export const config = {
   httpPort: Number(process.env.PORT ?? 3000),
+  // Unset listens on every address, IPv6 included.
+  httpHost: process.env.HOST || undefined,
   // IPs announced to WebRTC clients as ICE candidates. Defaults to every
   // non-internal IPv4 on the machine (e.g. public + LAN), so remote and
   // local clients each find a reachable path. Override with a
